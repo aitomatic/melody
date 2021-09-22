@@ -1,0 +1,9 @@
+name: aws-py-eks
+runtime:
+  name: python
+description: A minimal AWS Python EKS example cluster
+template:
+  config:
+    aws:region:
+      description: The AWS region to deploy into
+      default: us-east-2
