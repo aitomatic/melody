@@ -1,7 +1,7 @@
-name: aws-py-eks
+name: aitomatic-ml-infra
 runtime:
-  name: python
-description: A minimal AWS Python EKS example cluster
+  name: nodejs
+description: MLOps Infra for Aitomatic Cloud
 template:
   config:
     aws:region:

@@ -11,8 +11,11 @@ pulumi = "^3"
 pulumi-aws = "^4"
 prefect = {extras = ["viz"], version = "^0.15.6"}
 PyYAML = "^5.4.1"
+pulumi-kubernetes = "^3"
+pulumi-eks = "^0.33.0"
 
 [tool.poetry.dev-dependencies]
+autopep8 = "^1.5.7"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
