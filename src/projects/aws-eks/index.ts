@@ -71,9 +71,9 @@ const managedNodeGroup = eks.createManagedNodeGroup("aitomatic-eks-ng", {
 // Export the cluster's kubeconfig.
 export const kubeconfig = cluster.kubeconfig;
 
-const aiSystemNs = new k8s.core.v1.Namespace("aitomatic-system", { metadata: { labels: { "istio-injection": "enabled" } } }, { "provider": cluster.provider });
-const aiInfraNs = new k8s.core.v1.Namespace("aitomatic-infra", { metadata: { labels: { "istio-injection": "enabled" } } }, { "provider": cluster.provider });
-const aiAppsNs = new k8s.core.v1.Namespace("aitomatic-apps", { metadata: { labels: { "istio-injection": "enabled" } } }, { "provider": cluster.provider });
+const aiSystemNs = new k8s.core.v1.Namespace("aitomatic-system", { metadata: { labels: { "istio-injection": "enabled" } } }, {dependsOn: [cluster], "provider": cluster.provider });
+const aiInfraNs = new k8s.core.v1.Namespace("aitomatic-infra", { metadata: { labels: { "istio-injection": "enabled" } } }, {dependsOn: [cluster], "provider": cluster.provider });
+const aiAppsNs = new k8s.core.v1.Namespace("aitomatic-apps", { metadata: { labels: { "istio-injection": "enabled" } } }, {dependsOn: [cluster], "provider": cluster.provider });
 
 /*const autoScalerRole = new Role("aitomatic-autoscaler", {
     assumeRolePolicy: aws.iam.assumeRolePolicyForPrincipal
@@ -87,7 +87,7 @@ const metricsServerChart = new k8s.helm.v3.Chart("aisys-ms", {
     fetchOpts: {
         repo: "https://charts.bitnami.com/bitnami",
     },
-}, { "provider": cluster.provider });
+}, {dependsOn: [cluster, aiSystemNs], "provider": cluster.provider });
 
 
 // Deploy autoscaler from K8s Helm Repo to aitomatic-system Namespace
@@ -98,7 +98,7 @@ const autoScalerChart = new k8s.helm.v3.Chart("aisys-as", {
     fetchOpts: {
         repo: "https://kubernetes.github.io/autoscaler",
     },
-}, { "provider": cluster.provider });
+}, {dependsOn: [cluster, aiSystemNs], "provider": cluster.provider });
 
 
 // Setup Istio
@@ -114,7 +114,7 @@ new k8s.rbac.v1.ClusterRoleBinding(
             name: "cluster-admin"
         },
         subjects: [{ apiGroup: "rbac.authorization.k8s.io", kind: "User", name: config.get("username") || "admin" }]
-    }, { provider: cluster.provider });
+    }, {dependsOn: [cluster], provider: cluster.provider });
 
 const istio = new k8s.helm.v3.Chart("aisys-istio",
     {
@@ -127,7 +127,7 @@ const istio = new k8s.helm.v3.Chart("aisys-istio",
             repo: "https://getindata.github.io/helm-charts/"
         }
     },
-    { dependsOn: [aiIstioNs], providers: { kubernetes: cluster.provider } });
+    { dependsOn: [aiIstioNs, cluster], providers: { kubernetes: cluster.provider } });
 
 const kiali = new k8s.helm.v3.Chart("aisys-kiali",
     {
@@ -136,7 +136,7 @@ const kiali = new k8s.helm.v3.Chart("aisys-kiali",
         fetchOpts: {
             repo: "https://kiali.org/helm-charts/"
         }
-    }, { dependsOn: [istio], providers: { kubernetes: cluster.provider } });
+    }, { dependsOn: [istio, cluster], providers: { kubernetes: cluster.provider } });
 
 // Create PostgreSQL database for System
 const dbPassword = new random.RandomPassword('aitomatic-system-db-password', { length: 16, special: false });
@@ -174,7 +174,7 @@ const secretInfra = new kx.Secret("aitomatic-infradb-secrets", {
     metadata: {
         namespace: aiInfraNs.id
     },
-}, { "provider": cluster.provider });
+}, {dependsOn: [cluster], "provider": cluster.provider });
 
 //Put DB Secrets in Apps Namespace
 const secretApps = new kx.Secret("aitomatic-appsdb-secrets", {
@@ -188,7 +188,7 @@ const secretApps = new kx.Secret("aitomatic-appsdb-secrets", {
     metadata: {
         namespace: aiAppsNs.id
     },
-}, {"provider":cluster.provider});
+}, {dependsOn: [cluster], "provider":cluster.provider});
 
 
 const seldonChart = new k8s.helm.v3.Chart("aiinfra-seldon",
@@ -204,6 +204,6 @@ const seldonChart = new k8s.helm.v3.Chart("aiinfra-seldon",
             "usageMetrics.enabled": true,
             "istio.gateway": "istio-ingressgateway",
         }
-    }, { dependsOn: [istio], providers: { kubernetes: cluster.provider } });
+    }, { dependsOn: [cluster, istio], providers: { kubernetes: cluster.provider } });
 
 
