@@ -25,6 +25,18 @@ tests = ["coverage[toml] (>=5.0.2)", "hypothesis", "pympler", "pytest (>=4.3.0)"
 tests_no_zope = ["coverage[toml] (>=5.0.2)", "hypothesis", "pympler", "pytest (>=4.3.0)", "six", "mypy", "pytest-mypy-plugins"]
 
 [[package]]
+name = "autopep8"
+version = "1.5.7"
+description = "A tool that automatically formats Python code to conform to the PEP 8 style guide"
+category = "dev"
+optional = false
+python-versions = "*"
+
+[package.dependencies]
+pycodestyle = ">=2.7.0"
+toml = "*"
+
+[[package]]
 name = "certifi"
 version = "2021.5.30"
 description = "Python package for providing Mozilla's CA Bundle."
@@ -464,6 +476,44 @@ pulumi = ">=3.0.0,<4.0.0"
 semver = ">=2.8.1"
 
 [[package]]
+name = "pulumi-eks"
+version = "0.33.0"
+description = "Pulumi Amazon Web Services (AWS) EKS Components."
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.dependencies]
+parver = ">=0.2.1"
+pulumi = ">=3.0.0,<4.0.0"
+pulumi-aws = ">=4.15.0,<5.0.0"
+pulumi-kubernetes = ">=3.0.0,<4.0.0"
+semver = ">=2.8.1"
+
+[[package]]
+name = "pulumi-kubernetes"
+version = "3.7.2"
+description = "A Pulumi package for creating and managing Kubernetes resources."
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.dependencies]
+parver = ">=0.2.1"
+pulumi = ">=3.0.0,<4.0.0"
+pyyaml = ">=5.3.1,<6.0"
+requests = ">=2.21,<3.0"
+semver = ">=2.8.1"
+
+[[package]]
+name = "pycodestyle"
+version = "2.7.0"
+description = "Python style guide checker"
+category = "dev"
+optional = false
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
+
+[[package]]
 name = "pyparsing"
 version = "2.4.7"
 description = "Python parsing module"
@@ -676,7 +726,7 @@ heapdict = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "0631f30bed3bc8c5b58e6f238f2e00e701bcafc280339a0f5611c8965d2e4508"
+content-hash = "b48b00fab9a45b0ee710dfd48f60cc174e7878c3a10d48e511baca7af6b53db3"
 
 [metadata.files]
 arpeggio = [
@@ -686,6 +736,10 @@ arpeggio = [
 attrs = [
     {file = "attrs-21.2.0-py2.py3-none-any.whl", hash = "sha256:149e90d6d8ac20db7a955ad60cf0e6881a3f20d37096140088356da6c716b0b1"},
     {file = "attrs-21.2.0.tar.gz", hash = "sha256:ef6aaac3ca6cd92904cdd0d83f629a15f18053ec84e6432106f7a4d04ae4f5fb"},
+]
+autopep8 = [
+    {file = "autopep8-1.5.7-py2.py3-none-any.whl", hash = "sha256:aa213493c30dcdac99537249ee65b24af0b2c29f2e83cd8b3f68760441ed0db9"},
+    {file = "autopep8-1.5.7.tar.gz", hash = "sha256:276ced7e9e3cb22e5d7c14748384a5cf5d9002257c0ed50c0e075b68011bb6d0"},
 ]
 certifi = [
     {file = "certifi-2021.5.30-py2.py3-none-any.whl", hash = "sha256:50b1e4f8446b06f41be7dd6338db18e0990601dce795c2b1686458aa7e8fa7d8"},
@@ -988,6 +1042,16 @@ pulumi = [
 ]
 pulumi-aws = [
     {file = "pulumi_aws-4.21.0.tar.gz", hash = "sha256:ee9366a14f8ebac0dea604a71fbc91705e439178a8bc163c732b01b00beab1b1"},
+]
+pulumi-eks = [
+    {file = "pulumi_eks-0.33.0.tar.gz", hash = "sha256:4f327ecccf1da907938b091dbc4724e60c5e89151a86389cbbbae07886eb4515"},
+]
+pulumi-kubernetes = [
+    {file = "pulumi_kubernetes-3.7.2.tar.gz", hash = "sha256:685f5e299891497f9c6a8b2aabac56a8b774dbf5819db917ba9ed57ddf4cdb55"},
+]
+pycodestyle = [
+    {file = "pycodestyle-2.7.0-py2.py3-none-any.whl", hash = "sha256:514f76d918fcc0b55c6680472f0a37970994e07bbb80725808c17089be302068"},
+    {file = "pycodestyle-2.7.0.tar.gz", hash = "sha256:c389c1d06bf7904078ca03399a4816f974a1d590090fecea0c63ec26ebaf1cef"},
 ]
 pyparsing = [
     {file = "pyparsing-2.4.7-py2.py3-none-any.whl", hash = "sha256:ef9d7589ef3c200abe66653d3f1ab1033c3c419ae9b9bdb1240a85b024efc88b"},
