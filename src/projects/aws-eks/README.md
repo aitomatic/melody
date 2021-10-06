@@ -9,10 +9,16 @@
 $ prefect backend server
 ```
 
-3. Configure you AWS credentials
+3. Configure your AWS credentials
 
 ```
 $ aws configure 
+```
+
+if you are not using default profile
+
+```
+$ export AWS_PROFILE=<profile_name>
 ```
 
 4. Setup *PULUMI_CONFIG_PASSPHRASE* to encode data locally
@@ -35,6 +41,10 @@ $ pulumi config set aws:region us-west-2
 
 7. It will take 15-20 minutes, once the infra is up and running, you can go to AWS and see the cluster, RDS and all other components.
 
+```
+$ pulumi up
+```
+
 8. Fetch KubeConfig for you new cluster and set it to be used with kubectl
 
 ```
@@ -48,7 +58,7 @@ $ export KUBECONFIG=`pwd`/kubeconfig
 kubectl get namespaces
 ```
 
-10. Install and run VMWare Octant fro mthe console to get a visual interface to the cluster
+10. Install and run VMWare Octant from the console to get a visual interface to the cluster
  
 
 
