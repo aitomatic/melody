@@ -50,6 +50,9 @@ const cluster = new eks.Cluster("aitomatic-eks-cluster", {
         "managedBy": "aitomatic"
     },
     instanceRoles: [role],
+    providerCredentialOpts: {
+        'profileName': 'aitomatic'
+    }
 });
 
 // Create a simple AWS managed node group using a cluster as input.
