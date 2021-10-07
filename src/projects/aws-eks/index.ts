@@ -11,10 +11,10 @@ const config = new Config();
 
 // Create a new VPC for the cluster.
 const vpc = new awsx.ec2.Vpc('aitomatic-eks-vpc', {
-  numberOfAvailabilityZones: 'all',
+  numberOfNatGateways: 1,
   tags: {
     managedBy: 'aitomatic'
-  }
+  },
 });
 
 // IAM roles for the node group.
@@ -87,17 +87,26 @@ export const kubeconfig = cluster.kubeconfig;
 const aiSystemNs = new k8s.core.v1.Namespace(
   'aitomatic-system',
   { metadata: { labels: { 'istio-injection': 'enabled' } } },
-  { dependsOn: [cluster], provider: cluster.provider }
+  { 
+    dependsOn: [cluster], 
+    provider: cluster.provider 
+  }
 );
 const aiInfraNs = new k8s.core.v1.Namespace(
   'aitomatic-infra',
   { metadata: { labels: { 'istio-injection': 'enabled' } } },
-  { dependsOn: [cluster], provider: cluster.provider }
+  { 
+    dependsOn: [cluster], 
+    provider: cluster.provider 
+  }
 );
 const aiAppsNs = new k8s.core.v1.Namespace(
   'aitomatic-apps',
   { metadata: { labels: { 'istio-injection': 'enabled' } } },
-  { dependsOn: [cluster], provider: cluster.provider }
+  { 
+    dependsOn: [cluster], 
+    provider: cluster.provider 
+  }
 );
 
 /*const autoScalerRole = new Role("aitomatic-autoscaler", {
@@ -115,7 +124,10 @@ const metricsServerChart = new k8s.helm.v3.Chart(
       repo: 'https://charts.bitnami.com/bitnami'
     }
   },
-  { dependsOn: [cluster, aiSystemNs], provider: cluster.provider }
+  { 
+    dependsOn: [cluster, aiSystemNs], 
+    provider: cluster.provider 
+  }
 );
 
 // Deploy autoscaler from K8s Helm Repo to aitomatic-system Namespace
@@ -129,7 +141,10 @@ const autoScalerChart = new k8s.helm.v3.Chart(
       repo: 'https://kubernetes.github.io/autoscaler'
     }
   },
-  { dependsOn: [cluster, aiSystemNs], provider: cluster.provider }
+  { 
+    dependsOn: [cluster, aiSystemNs], 
+    provider: cluster.provider 
+  }
 );
 
 // Setup Istio
@@ -156,7 +171,10 @@ new k8s.rbac.v1.ClusterRoleBinding(
       }
     ]
   },
-  { dependsOn: [cluster], provider: cluster.provider }
+  { 
+    dependsOn: [cluster], 
+    provider: cluster.provider 
+  }
 );
 
 const istio = new k8s.helm.v3.Chart(
@@ -186,7 +204,10 @@ const kiali = new k8s.helm.v3.Chart(
       repo: 'https://kiali.org/helm-charts/'
     }
   },
-  { dependsOn: [istio, cluster], providers: { kubernetes: cluster.provider } }
+  { 
+    dependsOn: [istio, cluster], 
+    providers: { kubernetes: cluster.provider } 
+  }
 );
 
 // Create PostgreSQL database for System
@@ -234,7 +255,10 @@ const secretInfra = new kx.Secret(
       namespace: aiInfraNs.id
     }
   },
-  { dependsOn: [cluster], provider: cluster.provider }
+  { 
+    dependsOn: [cluster], 
+    provider: cluster.provider 
+  }
 );
 
 //Put DB Secrets in Apps Namespace
@@ -250,10 +274,13 @@ const secretApps = new kx.Secret(
     },
     metadata: {
       namespace: aiAppsNs.id
-    }
-  },
-  { dependsOn: [cluster], provider: cluster.provider }
+    },
+  }, { 
+    dependsOn: [cluster], 
+    provider: cluster.provider 
+  }
 );
+
 
 const seldonChart = new k8s.helm.v3.Chart(
   'aiinfra-seldon',
@@ -267,8 +294,11 @@ const seldonChart = new k8s.helm.v3.Chart(
     values: {
       'istio.enabled': true,
       'usageMetrics.enabled': true,
-      'istio.gateway': 'istio-ingressgateway'
-    }
-  },
-  { dependsOn: [cluster, istio], providers: { kubernetes: cluster.provider } }
+      'istio.gateway': 'istio-ingressgateway',
+      'ambassador.enabled': false,
+    },
+  }, { 
+    dependsOn: [cluster, istio], 
+    providers: { kubernetes: cluster.provider } 
+  }
 );
