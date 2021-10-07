@@ -4,7 +4,9 @@
   "description": "AWS Infra for Aitomatic MLOps",
   "main": "index.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint . --ext .ts",
+    "prettier-format": "prettier --config .prettierrc '*.ts' --write"
   },
   "keywords": [
     "mlops",
@@ -22,5 +24,13 @@
     "@pulumi/kubernetesx": "^0.1.6",
     "@pulumi/pulumi": "^3.13.2",
     "@pulumi/random": "^4.2.0"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^4.33.0",
+    "@typescript-eslint/parser": "^4.33.0",
+    "eslint": "^7.32.0",
+    "eslint-config-prettier": "^8.3.0",
+    "eslint-plugin-prettier": "^4.0.0",
+    "prettier": "^2.4.1"
   }
 }
