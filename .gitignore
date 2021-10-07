@@ -131,3 +131,9 @@ dmypy.json
 
 
 Pulumi.*.yaml
+package-lock.json
+
+
+# NPM stuff
+node_modules/
+kubeconfig
