@@ -15,12 +15,6 @@ $ prefect backend server
 $ aws configure 
 ```
 
-if you are not using default profile
-
-```
-$ export AWS_PROFILE=<profile_name>
-```
-
 4. Setup *PULUMI_CONFIG_PASSPHRASE* to encode data locally
 
 ```
@@ -37,6 +31,13 @@ $ pulumi stack init
 
 ```
 $ pulumi config set aws:region us-west-2
+```
+
+if you are not using default profile
+
+```
+$ export AWS_PROFILE=<profile_name>
+$ pulumi config set aws:profile <profile_name>
 ```
 
 7. It will take 15-20 minutes, once the infra is up and running, you can go to AWS and see the cluster, RDS and all other components.

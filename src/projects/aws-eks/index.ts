@@ -51,7 +51,7 @@ const cluster = new eks.Cluster("aitomatic-eks-cluster", {
     },
     instanceRoles: [role],
     providerCredentialOpts: {
-        'profileName': 'aitomatic'
+        'profileName': config.get('aws:profile')
     }
 });
 
