@@ -157,11 +157,6 @@ const aiAppsNs = new k8s.core.v1.Namespace(
   }
 );
 
-/*const autoScalerRole = new Role("aitomatic-autoscaler", {
-    assumeRolePolicy: aws.iam.assumeRolePolicyForPrincipal
-})*/
-
-
 // Deploy metrics-server from Bitnami Helm Repo to aitomatic-system Namespace
 const metricsServerChart = new k8s.helm.v3.Chart(
   'kubesys-ms',
@@ -314,7 +309,7 @@ const istio = new k8s.helm.v3.Release(
   {
     chart: 'istio',
     version: '1.11.1',
-    namespace: 'istio-system',
+    namespace: aiIstioNs.id,
     repositoryOpts: {
       repo: 'https://getindata.github.io/helm-charts/'
     },
@@ -330,7 +325,7 @@ const kiali = new k8s.helm.v3.Release(
   'aisys-kiali',
   {
     chart: 'kiali-server',
-    namespace: 'istio-system',
+    namespace: aiIstioNs.id,
     repositoryOpts: {
       repo: 'https://kiali.org/helm-charts/'
     },
@@ -343,7 +338,7 @@ const kiali = new k8s.helm.v3.Release(
 );
 
 
-/Put DB Secrets in Infra Namespace
+//Put DB Secrets in Infra Namespace
 const secretInfra = new kx.Secret(
   'aitomatic-infradb-secrets',
   {
@@ -381,5 +376,40 @@ const secretApps = new kx.Secret(
   }, { 
     dependsOn: [cluster], 
     provider: cluster.provider 
+  }
+);
+
+// Install JenkinsX
+
+const jxgitNs = new k8s.core.v1.Namespace(
+  'jx-git-operator',
+  {
+    metadata : {
+      name: 'jx-git-operator'
+    }
+  },
+  {
+    dependsOn: [cluster, managedNodeGroup],
+    provider: cluster.provider
+  }
+)
+
+const jxgit = new k8s.helm.v3.Release(  
+  'jxgo',
+  {
+    chart: 'jx-git-operator',
+    namespace: jxgitNs.id,
+    repositoryOpts: {
+      repo: 'https://jenkins-x-charts.github.io/repo'
+    },
+    values: {
+      url: config.get("jx.giturl"),
+      username: config.get("jx.gitusername"),
+      password: config.get("jx.gittoken")  
+    },
+  },
+  {
+    dependsOn: [istio, cluster],
+    provider: cluster.provider
   }
 );
