@@ -4,10 +4,11 @@ import * as eks from '@pulumi/eks';
 import * as pulumi from '@pulumi/pulumi';
 import * as k8s from '@pulumi/kubernetes';
 import * as kx from '@pulumi/kubernetesx';
-import { Config } from '@pulumi/pulumi';
+import { Config, Output } from '@pulumi/pulumi';
 import * as random from '@pulumi/random';
 
 const config = new Config();
+const kubeSystemNamespace = 'kube-system';
 
 // Create a new VPC for the cluster.
 const vpc = new awsx.ec2.Vpc('aitomatic-eks-vpc', {
@@ -17,7 +18,7 @@ const vpc = new awsx.ec2.Vpc('aitomatic-eks-vpc', {
   },
 });
 
-// IAM roles for the node group.
+// IAM roles for the node group
 const role = new aws.iam.Role('aitomatic-eks-ng-role', {
   assumeRolePolicy: aws.iam.assumeRolePolicyForPrincipal({
     Service: 'ec2.amazonaws.com'
@@ -38,7 +39,7 @@ for (const policyArn of [
   );
 }
 
-// Create the EKS cluster itself with Fargate enabled.
+// Create the EKS cluster itself without default node group.
 const cluster = new eks.Cluster('aitomatic-eks-cluster', {
   skipDefaultNodeGroup: true,
   vpcId: vpc.id,
@@ -84,28 +85,75 @@ const managedNodeGroup = eks.createManagedNodeGroup(
 // Export the cluster's kubeconfig.
 export const kubeconfig = cluster.kubeconfig;
 
+// Create PostgreSQL database for System
+const dbPassword = new random.RandomPassword('aitomatic-system-db-password', {
+  length: 16,
+  special: false
+});
+
+const dbSubnetGroup = new aws.rds.SubnetGroup('aitomatic-db-sn', {
+  subnetIds: vpc.privateSubnetIds,
+  tags: {
+    Name: 'RDS Subnet Group',
+    managedBy: 'aitomatic'
+  }
+});
+
+
+const db = new aws.rds.Instance('aitomatic-db', {
+  allocatedStorage: 10,
+  maxAllocatedStorage: 100,
+  engine: 'postgres',
+  engineVersion: '11.10',
+  instanceClass: 'db.t3.medium',
+  password: dbPassword.result,
+  skipFinalSnapshot: true,
+  vpcSecurityGroupIds: [
+    cluster.clusterSecurityGroup.id,
+    cluster.nodeSecurityGroup.id
+  ],
+  username: 'postgres',
+  dbSubnetGroupName: dbSubnetGroup.name
+});
+
+// Create namespaces
 const aiSystemNs = new k8s.core.v1.Namespace(
   'aitomatic-system',
-  { metadata: { labels: { 'istio-injection': 'enabled' } } },
-  { 
-    dependsOn: [cluster], 
-    provider: cluster.provider 
+  {
+    metadata: {
+      name: 'aitomatic-system',
+      labels: { 'istio-injection': 'enabled' }
+    }
+  },
+  {
+    dependsOn: [cluster, managedNodeGroup],
+    provider: cluster.provider
   }
 );
 const aiInfraNs = new k8s.core.v1.Namespace(
   'aitomatic-infra',
-  { metadata: { labels: { 'istio-injection': 'enabled' } } },
-  { 
-    dependsOn: [cluster], 
-    provider: cluster.provider 
+  {
+    metadata: {
+      name: 'aitomatic-infra',
+      labels: { 'istio-injection': 'enabled' }
+    }
+  },
+  {
+    dependsOn: [cluster, managedNodeGroup],
+    provider: cluster.provider
   }
 );
 const aiAppsNs = new k8s.core.v1.Namespace(
   'aitomatic-apps',
-  { metadata: { labels: { 'istio-injection': 'enabled' } } },
-  { 
-    dependsOn: [cluster], 
-    provider: cluster.provider 
+  {
+    metadata: {
+      name: 'aitomatic-apps',
+      labels: { 'istio-injection': 'enabled' }
+    }
+  },
+  {
+    dependsOn: [cluster, managedNodeGroup],
+    provider: cluster.provider
   }
 );
 
@@ -113,45 +161,129 @@ const aiAppsNs = new k8s.core.v1.Namespace(
     assumeRolePolicy: aws.iam.assumeRolePolicyForPrincipal
 })*/
 
+
 // Deploy metrics-server from Bitnami Helm Repo to aitomatic-system Namespace
 const metricsServerChart = new k8s.helm.v3.Chart(
-  'aisys-ms',
+  'kubesys-ms',
   {
-    version: '5.10.4',
     chart: 'metrics-server',
-    namespace: aiSystemNs.id,
+    version: '3.5.0',
+    namespace: kubeSystemNamespace,
     fetchOpts: {
-      repo: 'https://charts.bitnami.com/bitnami'
-    }
+      repo: 'https://kubernetes-sigs.github.io/metrics-server/'
+    },
+    values: {},
   },
-  { 
-    dependsOn: [cluster, aiSystemNs], 
-    provider: cluster.provider 
+  {
+    dependsOn: [cluster, aiSystemNs],
+    provider: cluster.provider
   }
 );
 
-// Deploy autoscaler from K8s Helm Repo to aitomatic-system Namespace
-const autoScalerChart = new k8s.helm.v3.Chart(
-  'aisys-as',
-  {
-    version: '9.10.7',
-    chart: 'cluster-autoscaler',
-    namespace: aiSystemNs.id,
-    fetchOpts: {
-      repo: 'https://kubernetes.github.io/autoscaler'
+// Setup Kubernetes Autoscaler
+
+const clusterOidcProvider = cluster.core.oidcProvider;
+const clusterOidcProviderUrl = clusterOidcProvider.url;
+const clusterOidcArn = clusterOidcProvider.arn;
+
+const autoscalerAssumeRolePolicy = pulumi.all([clusterOidcProviderUrl, clusterOidcArn]).apply(([url, arn]) => aws.iam.getPolicyDocument({
+  statements: [
+    {
+      effect: 'Allow',
+      principals: [
+        {
+          identifiers: [arn],
+          type: 'Federated'
+        }
+      ],
+      actions: ['sts:AssumeRoleWithWebIdentity'],
+      conditions: [
+        {
+          test: 'StringEquals',
+          values: ['system:serviceaccount:kube-system:autoscaler-aws-cluster-autoscaler'],
+          variable: `${url}:sub`
+        }
+      ],
     }
-  },
-  { 
-    dependsOn: [cluster, aiSystemNs], 
-    provider: cluster.provider 
-  }
+  ]
+})
 );
+
+const autoscalerRole = new aws.iam.Role('cluster-autoscaler', {
+  assumeRolePolicy: autoscalerAssumeRolePolicy.json
+});
+
+const autoscalerPolicy = new aws.iam.Policy('autoscaler-policy', {
+  description: pulumi.interpolate`Autoscaler policy for ${cluster.eksCluster.id}`,
+  policy: JSON.stringify({
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Action": [
+          "autoscaling:DescribeAutoScalingGroups",
+          "autoscaling:DescribeAutoScalingInstances",
+          "autoscaling:DescribeLaunchConfigurations",
+          "autoscaling:DescribeTags",
+          "autoscaling:SetDesiredCapacity",
+          "autoscaling:TerminateInstanceInAutoScalingGroup",
+          "ec2:DescribeLaunchTemplateVersions"
+        ],
+        "Resource": "*"
+      }
+    ]
+  })
+});
+
+new aws.iam.RolePolicyAttachment('autoscaler-role-attach-policy', {
+  policyArn: autoscalerPolicy.arn,
+  role: autoscalerRole.name
+});
+
+const autoscaler = new k8s.helm.v3.Chart('autoscaler', {
+  namespace: kubeSystemNamespace,
+  chart: 'cluster-autoscaler',
+  fetchOpts: {
+    repo: 'https://kubernetes.github.io/autoscaler'
+  },
+  version: '9.10.7',
+  values: {
+    cloudProvider: 'aws',
+    rbac: {
+      serviceAccount: {
+        annotations: {
+          'eks.amazonaws.com/role-arn': autoscalerRole.arn
+        }
+      }
+    },
+    awsRegion: config.get("aws.region"),
+    autoDiscovery: {
+      enabled: true,
+      clusterName: cluster.eksCluster.name
+    }
+  }
+}, {
+  provider: cluster.provider,
+  dependsOn: [cluster, metricsServerChart]
+});
 
 // Setup Istio
 const aiIstioNs = new k8s.core.v1.Namespace(
   'istio-system',
   { metadata: { name: 'istio-system' } },
-  { provider: cluster.provider }
+  {
+    provider: cluster.provider,
+    dependsOn: [cluster, managedNodeGroup]
+  }
+);
+
+const aiIstioIngressNs = new k8s.core.v1.Namespace(
+  'istio-ingress',
+  { metadata: { name: 'istio-ingress' } },
+  {
+    provider: cluster.provider,
+    dependsOn: [cluster, managedNodeGroup]
+  }
 );
 
 new k8s.rbac.v1.ClusterRoleBinding(
@@ -171,134 +303,42 @@ new k8s.rbac.v1.ClusterRoleBinding(
       }
     ]
   },
-  { 
-    dependsOn: [cluster], 
-    provider: cluster.provider 
+  {
+    dependsOn: [cluster],
+    provider: cluster.provider
   }
 );
 
-const istio = new k8s.helm.v3.Chart(
+const istio = new k8s.helm.v3.Release(
   'aisys-istio',
   {
     chart: 'istio',
-    namespace: aiIstioNs.id,
     version: '1.11.1',
-    // for all options check https://github.com/istio/istio/tree/master/install/kubernetes/helm/istio
-    values: { kiali: { enabled: true } },
-    fetchOpts: {
+    namespace: 'istio-system',
+    repositoryOpts: {
       repo: 'https://getindata.github.io/helm-charts/'
-    }
+    },
+    values: {},
   },
   {
     dependsOn: [aiIstioNs, cluster],
-    providers: { kubernetes: cluster.provider }
+    provider: cluster.provider
   }
 );
 
-const kiali = new k8s.helm.v3.Chart(
+const kiali = new k8s.helm.v3.Release(
   'aisys-kiali',
   {
     chart: 'kiali-server',
-    namespace: aiIstioNs.id,
-    fetchOpts: {
+    namespace: 'istio-system',
+    repositoryOpts: {
       repo: 'https://kiali.org/helm-charts/'
-    }
+    },
+    values: {},
   },
-  { 
-    dependsOn: [istio, cluster], 
-    providers: { kubernetes: cluster.provider } 
-  }
-);
-
-// Create PostgreSQL database for System
-const dbPassword = new random.RandomPassword('aitomatic-system-db-password', {
-  length: 16,
-  special: false
-});
-
-const dbSubnetGroup = new aws.rds.SubnetGroup('aitomatic-db-sn', {
-  subnetIds: vpc.privateSubnetIds,
-  tags: {
-    Name: 'RDS Subnet Group',
-    managedBy: 'aitomatic'
-  }
-});
-
-const db = new aws.rds.Instance('aitomatic-db', {
-  allocatedStorage: 10,
-  maxAllocatedStorage: 100,
-  engine: 'postgres',
-  engineVersion: '11.10',
-  instanceClass: 'db.t3.medium',
-  password: dbPassword.result,
-  skipFinalSnapshot: true,
-  vpcSecurityGroupIds: [
-    cluster.clusterSecurityGroup.id,
-    cluster.nodeSecurityGroup.id
-  ],
-  username: 'postgres',
-  dbSubnetGroupName: dbSubnetGroup.name
-});
-
-//Put DB Secrets in Infra Namespace
-const secretInfra = new kx.Secret(
-  'aitomatic-infradb-secrets',
   {
-    stringData: {
-      'aitomatic-db-user': db.username,
-      'aitomatic-db-password': db.password,
-      'aitomatic-db-host': db.address,
-      'aitomatic-db-port': db.port.apply((x) => `x`),
-      'aitomatic-db-dbname': db.id
-    },
-    metadata: {
-      namespace: aiInfraNs.id
-    }
-  },
-  { 
-    dependsOn: [cluster], 
-    provider: cluster.provider 
+    dependsOn: [istio, cluster],
+    provider: cluster.provider
   }
 );
 
-//Put DB Secrets in Apps Namespace
-const secretApps = new kx.Secret(
-  'aitomatic-appsdb-secrets',
-  {
-    stringData: {
-      'aitomatic-db-user': db.username,
-      'aitomatic-db-password': db.password,
-      'aitomatic-db-host': db.address,
-      'aitomatic-db-port': db.port.apply((p) => `${p}`),
-      'aitomatic-db-dbname': db.name
-    },
-    metadata: {
-      namespace: aiAppsNs.id
-    },
-  }, { 
-    dependsOn: [cluster], 
-    provider: cluster.provider 
-  }
-);
-
-
-const seldonChart = new k8s.helm.v3.Chart(
-  'aiinfra-seldon',
-  {
-    chart: 'seldon-core-operator',
-    version: '0.2.8-SNAPSHOT',
-    namespace: aiInfraNs.id,
-    fetchOpts: {
-      repo: 'https://storage.googleapis.com/seldon-charts/'
-    },
-    values: {
-      'istio.enabled': true,
-      'usageMetrics.enabled': true,
-      'istio.gateway': 'istio-ingressgateway',
-      'ambassador.enabled': false,
-    },
-  }, { 
-    dependsOn: [cluster, istio], 
-    providers: { kubernetes: cluster.provider } 
-  }
-);
