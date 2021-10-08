@@ -342,3 +342,44 @@ const kiali = new k8s.helm.v3.Release(
   }
 );
 
+
+/Put DB Secrets in Infra Namespace
+const secretInfra = new kx.Secret(
+  'aitomatic-infradb-secrets',
+  {
+    stringData: {
+      'aitomatic-db-user': db.username,
+      'aitomatic-db-password': db.password,
+      'aitomatic-db-host': db.address,
+      'aitomatic-db-port': db.port.apply((x) => `x`),
+      'aitomatic-db-dbname': db.id
+    },
+    metadata: {
+      namespace: aiInfraNs.id
+    }
+  },
+  { 
+    dependsOn: [cluster], 
+    provider: cluster.provider 
+  }
+);
+
+//Put DB Secrets in Apps Namespace
+const secretApps = new kx.Secret(
+  'aitomatic-appsdb-secrets',
+  {
+    stringData: {
+      'aitomatic-db-user': db.username,
+      'aitomatic-db-password': db.password,
+      'aitomatic-db-host': db.address,
+      'aitomatic-db-port': db.port.apply((p) => `${p}`),
+      'aitomatic-db-dbname': db.name
+    },
+    metadata: {
+      namespace: aiAppsNs.id
+    },
+  }, { 
+    dependsOn: [cluster], 
+    provider: cluster.provider 
+  }
+);
