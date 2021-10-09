@@ -40,26 +40,41 @@ $ export AWS_PROFILE=<profile_name>
 $ pulumi config set aws:profile <profile_name>
 ```
 
-7. It will take 15-20 minutes, once the infra is up and running, you can go to AWS and see the cluster, RDS and all other components.
+7. Configure JenkinsX Operator
+
+JenkinsX uses GitOps for deployment. THis makes it a bit complex to accomodate in our workflow. If you are doing a development deployment, you can use this repo `https://github.com/Aitomatic/jx3-kubernetes.git` in case of new customer onboarding, please create a clone of this repo in the format  `https://github.com/Aitomatic/jx3-kubernetes-<customer>.git` and use that.
+
+Use the AI Engineer Bot account creds for Github.
+
+```
+$ pulumi config set jx:giturl <git_repo_url>
+$ pulumi config set jx:gitusername <git_bot_username>
+$ pulumi config set jx:gittoken <git_bot_token>
+```
+
+8. It will take 15-20 minutes, once the infra is up and running, you can go to AWS and see the cluster, RDS and all other components.
 
 ```
 $ pulumi up
 ```
 
-8. Fetch KubeConfig for you new cluster and set it to be used with kubectl
+9. Fetch KubeConfig for you new cluster and set it to be used with kubectl
 
 ```
 $ pulumi stack output kubeconfig > kubeconfig
 $ export KUBECONFIG=`pwd`/kubeconfig
 ```
 
-9. Now you should be ready to use the K8s cluster with kubectl
+10. Now you should be ready to use the K8s cluster with kubectl
 
 ```
 kubectl get namespaces
 ```
 
-10. Install and run VMWare Octant from the console to get a visual interface to the cluster
+11. Install and run VMWare Octant from the console to get a visual interface to the cluster
+
+12. You can add JenkinsX plugin to Octant - https://github.com/jenkins-x-plugins/octant-jx
+
  
 
 
