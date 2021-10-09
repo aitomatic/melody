@@ -255,13 +255,13 @@ const secretApps = new kx.Secret(
   { dependsOn: [cluster], provider: cluster.provider }
 );
 
-const seldonChart = new k8s.helm.v3.Chart(
+const seldonChart = new k8s.helm.v3.Release(
   'aiinfra-seldon',
   {
     chart: 'seldon-core-operator',
-    version: '0.2.8-SNAPSHOT',
+    version: '1.11',
     namespace: aiInfraNs.id,
-    fetchOpts: {
+    repositoryOpts: {
       repo: 'https://storage.googleapis.com/seldon-charts/'
     },
     values: {
@@ -270,5 +270,8 @@ const seldonChart = new k8s.helm.v3.Chart(
       'istio.gateway': 'istio-ingressgateway'
     }
   },
-  { dependsOn: [cluster, istio], providers: { kubernetes: cluster.provider } }
+  {
+    dependsOn: [cluster, istio, aiInfraNs],
+    provider: cluster.provider
+  }
 );
