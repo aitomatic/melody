@@ -7,3 +7,13 @@ template:
     aws:region:
       description: The AWS region to deploy into
       default: us-east-2
+    jx:
+      giturl: 
+        description: The GitHub URL for the Repo
+        default: https://github.com/Aitomatic/jx3-kubernetes.git
+      gitusername:
+        description: The GitHub Bot username
+      gittoken:
+        description: The Github Bot API Token
+      
+      

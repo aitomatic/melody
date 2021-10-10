@@ -131,7 +131,6 @@ dmypy.json
 
 
 Pulumi.*.yaml
-package-lock.json
 
 
 # NPM stuff
