@@ -265,9 +265,13 @@ const seldonChart = new k8s.helm.v3.Release(
       repo: 'https://storage.googleapis.com/seldon-charts/'
     },
     values: {
-      'istio.enabled': true,
-      'usageMetrics.enabled': true,
-      'istio.gateway': 'istio-ingressgateway'
+      istio: {
+        enabled: true,
+        gateway: 'istio-ingressgateway'
+      },
+      usageMetrics: {
+        enabled: true
+      }
     }
   },
   {
