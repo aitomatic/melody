@@ -9,22 +9,25 @@ import * as random from '@pulumi/random';
 
 const config = new Config();
 const kubeSystemNamespace = 'kube-system';
+const pulumiStack = pulumi.getStack();
 
 // Create a new VPC for the cluster.
-const vpc = new awsx.ec2.Vpc('aitomatic-eks-vpc', {
+const vpc = new awsx.ec2.Vpc(`ai-eks-vpc-${pulumiStack}`, {
   numberOfNatGateways: 1,
   tags: {
-    managedBy: 'aitomatic'
+    managedBy: 'aitomatic',
+    stack: pulumiStack
   },
 });
 
 // IAM roles for the node group
-const role = new aws.iam.Role('aitomatic-eks-ng-role', {
+const role = new aws.iam.Role(`ai-eks-ngrole-${pulumiStack}`, {
   assumeRolePolicy: aws.iam.assumeRolePolicyForPrincipal({
     Service: 'ec2.amazonaws.com'
   }),
   tags: {
-    managedBy: 'aitomatic'
+    managedBy: 'aitomatic',
+    stack: pulumiStack
   }
 });
 let counter = 0;
@@ -34,13 +37,13 @@ for (const policyArn of [
   'arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly'
 ]) {
   new aws.iam.RolePolicyAttachment(
-    `aitomatic-eks-ng-role-policy-${counter++}`,
+    `ai-eks-ngrole-policy-${pulumiStack}-${counter++}`,
     { policyArn, role }
   );
 }
 
 // Create the EKS cluster itself without default node group.
-const cluster = new eks.Cluster('aitomatic-eks-cluster', {
+const cluster = new eks.Cluster(`ai-eks-cluster-${pulumiStack}`, {
   skipDefaultNodeGroup: true,
   vpcId: vpc.id,
   privateSubnetIds: vpc.privateSubnetIds,
@@ -55,7 +58,8 @@ const cluster = new eks.Cluster('aitomatic-eks-cluster', {
     'scheduler'
   ],
   tags: {
-    managedBy: 'aitomatic'
+    managedBy: 'aitomatic',
+    stack: pulumiStack
   },
   instanceRoles: [role],
   providerCredentialOpts: {
@@ -65,19 +69,22 @@ const cluster = new eks.Cluster('aitomatic-eks-cluster', {
 
 // Create a simple AWS managed node group using a cluster as input.
 const managedNodeGroup = eks.createManagedNodeGroup(
-  'aitomatic-eks-ng',
+  `ai-eks-mng--${pulumiStack}`,
   {
     cluster: cluster,
-    nodeGroupName: 'aitomatic-eks-ng1',
+    nodeGroupName: `ai-eks-mng--${pulumiStack}`,
     nodeRoleArn: role.arn,
     labels: { ondemand: 'true' },
-    tags: { org: 'pulumi', managedBy: 'aitomatic' },
-
+    tags: { 
+      org: 'pulumi', 
+      managedBy: 'aitomatic',
+      stack: 'pulumiStack'
+    },
     scalingConfig: {
       minSize: 2,
       maxSize: 20,
       desiredSize: 2
-    }
+    },
   },
   cluster
 );
@@ -91,16 +98,17 @@ const dbPassword = new random.RandomPassword('aitomatic-system-db-password', {
   special: false
 });
 
-const dbSubnetGroup = new aws.rds.SubnetGroup('aitomatic-db-sn', {
+const dbSubnetGroup = new aws.rds.SubnetGroup(`ai-db-sn-${pulumiStack}`, {
   subnetIds: vpc.privateSubnetIds,
   tags: {
     Name: 'RDS Subnet Group',
-    managedBy: 'aitomatic'
+    managedBy: 'aitomatic',
+    stack: pulumiStack
   }
 });
 
 
-const db = new aws.rds.Instance('aitomatic-db', {
+const db = new aws.rds.Instance(`ai-db-${pulumiStack}`, {
   allocatedStorage: 10,
   maxAllocatedStorage: 100,
   engine: 'postgres',
@@ -113,7 +121,11 @@ const db = new aws.rds.Instance('aitomatic-db', {
     cluster.nodeSecurityGroup.id
   ],
   username: 'postgres',
-  dbSubnetGroupName: dbSubnetGroup.name
+  dbSubnetGroupName: dbSubnetGroup.name,
+  tags: {
+    managedBy: 'aitomatic',
+    stack: pulumiStack
+  }
 });
 
 // Create namespaces
@@ -380,19 +392,36 @@ const secretApps = new kx.Secret(
 );
 
 // Install JenkinsX
+const jxGitopNsName = 'jx-git-operator';
 
-const jxgitNs = new k8s.core.v1.Namespace(
-  'jx-git-operator',
+const jxGitopNs = new k8s.core.v1.Namespace(
+  jxGitopNsName,
+  { metadata: { name: jxGitopNsName } },
   {
-    metadata : {
-      name: 'jx-git-operator'
-    }
+    provider: cluster.provider,
+    dependsOn: [cluster, managedNodeGroup]
+  }
+);
+
+const jxgit = new k8s.helm.v3.Chart(  
+  'jxgo',
+  {
+    chart: 'jx-git-operator',
+    namespace: jxGitopNsName,
+    fetchOpts: {
+      repo: 'https://jenkins-x-charts.github.io/repo'
+    },
+    values: {
+      url: config.get("jx.giturl"),
+      username: config.get("jx.gitusername"),
+      password: config.getSecret("jx.gittoken"),
+    },
   },
   {
-    dependsOn: [cluster, managedNodeGroup],
+    dependsOn: [managedNodeGroup, cluster],
     provider: cluster.provider
   }
-)
+);
 
 const seldonChart = new k8s.helm.v3.Release(
   'aiinfra-seldon',
@@ -408,6 +437,9 @@ const seldonChart = new k8s.helm.v3.Release(
         enabled: true,
         gateway: 'istio-ingressgateway'
       },
+      ambassador: {
+        enabled: false
+      },
       usageMetrics: {
         enabled: true
       }
@@ -419,22 +451,3 @@ const seldonChart = new k8s.helm.v3.Release(
   }
 );
 
-const jxgit = new k8s.helm.v3.Release(  
-  'jxgo',
-  {
-    chart: 'jx-git-operator',
-    namespace: jxgitNs.id,
-    repositoryOpts: {
-      repo: 'https://jenkins-x-charts.github.io/repo'
-    },
-    values: {
-      url: config.get("jx.giturl"),
-      username: config.get("jx.gitusername"),
-      password: config.get("jx.gittoken")  
-    },
-  },
-  {
-    dependsOn: [istio, cluster],
-    provider: cluster.provider
-  }
-);
