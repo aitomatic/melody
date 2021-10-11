@@ -394,6 +394,31 @@ const jxgitNs = new k8s.core.v1.Namespace(
   }
 )
 
+const seldonChart = new k8s.helm.v3.Release(
+  'aiinfra-seldon',
+  {
+    chart: 'seldon-core-operator',
+    version: '1.11',
+    namespace: aiInfraNs.id,
+    repositoryOpts: {
+      repo: 'https://storage.googleapis.com/seldon-charts/'
+    },
+    values: {
+      istio: {
+        enabled: true,
+        gateway: 'istio-ingressgateway'
+      },
+      usageMetrics: {
+        enabled: true
+      }
+    }
+  },
+  {
+    dependsOn: [cluster, istio, aiInfraNs],
+    provider: cluster.provider
+  }
+);
+
 const jxgit = new k8s.helm.v3.Release(  
   'jxgo',
   {
