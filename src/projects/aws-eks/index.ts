@@ -304,6 +304,38 @@ new k8s.rbac.v1.ClusterRoleBinding(
   }
 );
 
+const prometheus = new k8s.helm.v3.Release(
+  'aisys-prometheus',
+  {
+    chart: 'prometheus',
+    namespace: aiIstioNs.id,
+    repositoryOpts: {
+      repo: 'https://prometheus-community.github.io/helm-charts'
+    },
+    values: {},
+  },
+  {
+    dependsOn: [aiIstioNs, cluster],
+    provider: cluster.provider
+  }
+);
+
+const grafana = new k8s.helm.v3.Release(
+  'aisys-grafana',
+  {
+    chart: 'grafana',
+    namespace: aiIstioNs.id,
+    repositoryOpts: {
+      repo: 'https://grafana.github.io/helm-charts'
+    },
+    values: {}
+  },
+  {
+    dependsOn: [prometheus, aiIstioNs, cluster],
+    provider: cluster.provider
+  }
+);
+
 const istio = new k8s.helm.v3.Release(
   'aisys-istio',
   {
