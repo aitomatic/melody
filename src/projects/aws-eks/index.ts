@@ -7,9 +7,15 @@ import * as kx from '@pulumi/kubernetesx';
 import { Config, Output } from '@pulumi/pulumi';
 import * as random from '@pulumi/random';
 
-const config = new Config();
+const awsConfig = new Config("aws");
+const jxConfig = new Config("jx")
 const kubeSystemNamespace = 'kube-system';
 const pulumiStack = pulumi.getStack();
+
+const awsRegion = awsConfig.get('region');
+const jxGitUrl = jxConfig.get('giturl');
+const jsGitUsername = jxConfig.get('gitusername');
+const jxGitToken = jxConfig.getSecret('gittoken');
 
 // Create a new VPC for the cluster.
 const vpc = new awsx.ec2.Vpc(`ai-eks-vpc-${pulumiStack}`, {
@@ -63,16 +69,20 @@ const cluster = new eks.Cluster(`ai-eks-cluster-${pulumiStack}`, {
   },
   instanceRoles: [role],
   providerCredentialOpts: {
-    profileName: config.get('aws:profile')
+    profileName: awsConfig.get('profile')
   }
 });
 
 // Create a simple AWS managed node group using a cluster as input.
+const defaultAsgMin = 2;
+const defaultAsgMax = 20;
+const defaultAsgDesired = 3;
+
 const managedNodeGroup = eks.createManagedNodeGroup(
-  `ai-eks-mng--${pulumiStack}`,
+  `ai-eks-mng-${pulumiStack}`,
   {
     cluster: cluster,
-    nodeGroupName: `ai-eks-mng--${pulumiStack}`,
+    nodeGroupName: `ai-eks-mng-${pulumiStack}`,
     nodeRoleArn: role.arn,
     labels: { ondemand: 'true' },
     tags: { 
@@ -81,9 +91,9 @@ const managedNodeGroup = eks.createManagedNodeGroup(
       stack: 'pulumiStack'
     },
     scalingConfig: {
-      minSize: 2,
-      maxSize: 20,
-      desiredSize: 2
+      minSize: defaultAsgMin,
+      maxSize: defaultAsgMax,
+      desiredSize: defaultAsgDesired,
     },
   },
   cluster
@@ -252,36 +262,34 @@ new aws.iam.RolePolicyAttachment('autoscaler-role-attach-policy', {
   role: autoscalerRole.name
 });
 
-const autoscaler = new k8s.helm.v3.Chart(
-  'autoscaler',
-  {
-    namespace: kubeSystemNamespace,
-    chart: 'cluster-autoscaler',
-    fetchOpts: {
-      repo: 'https://kubernetes.github.io/autoscaler'
-    },
-    version: '9.10.7',
-    values: {
-      cloudProvider: 'aws',
-      rbac: {
-        serviceAccount: {
-          annotations: {
-            'eks.amazonaws.com/role-arn': autoscalerRole.arn
-          }
-        }
-      },
-      awsRegion: config.get('aws.region'),
-      autoDiscovery: {
-        enabled: true,
-        clusterName: cluster.eksCluster.name
-      }
-    }
+const autoscaler = new k8s.helm.v3.Release('autoscaler', {
+  name: 'autoscaler',
+  version: '9.10.7',
+  namespace: kubeSystemNamespace,
+  chart: 'cluster-autoscaler',
+  repositoryOpts: {
+    repo: 'https://kubernetes.github.io/autoscaler'
   },
-  {
-    provider: cluster.provider,
-    dependsOn: [cluster, metricsServerChart]
+  skipAwait: true,
+  values: {
+    cloudProvider: 'aws',
+    rbac: {
+      serviceAccount: {
+        annotations: {
+          'eks.amazonaws.com/role-arn': autoscalerRole.arn
+        }
+      }
+    },
+    awsRegion: awsRegion,
+    autoDiscovery: {
+      enabled: true,
+      clusterName: cluster.eksCluster.name
+    },
   }
-);
+}, {
+  provider: cluster.provider,
+  dependsOn: [cluster, metricsServerChart]
+});
 
 // Setup Istio
 const aiIstioNs = new k8s.core.v1.Namespace(
@@ -315,7 +323,7 @@ new k8s.rbac.v1.ClusterRoleBinding(
       {
         apiGroup: 'rbac.authorization.k8s.io',
         kind: 'User',
-        name: config.get('username') || 'admin'
+        name: 'admin'
       }
     ]
   },
@@ -412,18 +420,18 @@ const jxGitopNs = new k8s.core.v1.Namespace(
   }
 );
 
-const jxgit = new k8s.helm.v3.Chart(  
+const jxgit = new k8s.helm.v3.Release(  
   'jxgo',
   {
     chart: 'jx-git-operator',
     namespace: jxGitopNsName,
-    fetchOpts: {
+    repositoryOpts: {
       repo: 'https://jenkins-x-charts.github.io/repo'
     },
     values: {
-      url: config.get("jx.giturl"),
-      username: config.get("jx.gitusername"),
-      password: config.getSecret("jx.gittoken"),
+      url: jxGitUrl,
+      username: jsGitUsername,
+      password: jxGitToken,
     },
   },
   {
