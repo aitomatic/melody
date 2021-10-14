@@ -179,7 +179,7 @@ const metricsServerChart = new k8s.helm.v3.Chart(
     fetchOpts: {
       repo: 'https://kubernetes-sigs.github.io/metrics-server/'
     },
-    values: {},
+    values: {}
   },
   {
     dependsOn: [cluster, aiSystemNs],
@@ -193,28 +193,33 @@ const clusterOidcProvider = cluster.core.oidcProvider;
 const clusterOidcProviderUrl = clusterOidcProvider.url;
 const clusterOidcArn = clusterOidcProvider.arn;
 
-const autoscalerAssumeRolePolicy = pulumi.all([clusterOidcProviderUrl, clusterOidcArn]).apply(([url, arn]) => aws.iam.getPolicyDocument({
-  statements: [
-    {
-      effect: 'Allow',
-      principals: [
+const autoscalerAssumeRolePolicy = pulumi
+  .all([clusterOidcProviderUrl, clusterOidcArn])
+  .apply(([url, arn]) =>
+    aws.iam.getPolicyDocument({
+      statements: [
         {
-          identifiers: [arn],
-          type: 'Federated'
+          effect: 'Allow',
+          principals: [
+            {
+              identifiers: [arn],
+              type: 'Federated'
+            }
+          ],
+          actions: ['sts:AssumeRoleWithWebIdentity'],
+          conditions: [
+            {
+              test: 'StringEquals',
+              values: [
+                'system:serviceaccount:kube-system:autoscaler-aws-cluster-autoscaler'
+              ],
+              variable: `${url}:sub`
+            }
+          ]
         }
-      ],
-      actions: ['sts:AssumeRoleWithWebIdentity'],
-      conditions: [
-        {
-          test: 'StringEquals',
-          values: ['system:serviceaccount:kube-system:autoscaler-aws-cluster-autoscaler'],
-          variable: `${url}:sub`
-        }
-      ],
-    }
-  ]
-})
-);
+      ]
+    })
+  );
 
 const autoscalerRole = new aws.iam.Role('cluster-autoscaler', {
   assumeRolePolicy: autoscalerAssumeRolePolicy.json
@@ -223,20 +228,20 @@ const autoscalerRole = new aws.iam.Role('cluster-autoscaler', {
 const autoscalerPolicy = new aws.iam.Policy('autoscaler-policy', {
   description: pulumi.interpolate`Autoscaler policy for ${cluster.eksCluster.id}`,
   policy: JSON.stringify({
-    "Version": "2012-10-17",
-    "Statement": [
+    Version: '2012-10-17',
+    Statement: [
       {
-        "Effect": "Allow",
-        "Action": [
-          "autoscaling:DescribeAutoScalingGroups",
-          "autoscaling:DescribeAutoScalingInstances",
-          "autoscaling:DescribeLaunchConfigurations",
-          "autoscaling:DescribeTags",
-          "autoscaling:SetDesiredCapacity",
-          "autoscaling:TerminateInstanceInAutoScalingGroup",
-          "ec2:DescribeLaunchTemplateVersions"
+        Effect: 'Allow',
+        Action: [
+          'autoscaling:DescribeAutoScalingGroups',
+          'autoscaling:DescribeAutoScalingInstances',
+          'autoscaling:DescribeLaunchConfigurations',
+          'autoscaling:DescribeTags',
+          'autoscaling:SetDesiredCapacity',
+          'autoscaling:TerminateInstanceInAutoScalingGroup',
+          'ec2:DescribeLaunchTemplateVersions'
         ],
-        "Resource": "*"
+        Resource: '*'
       }
     ]
   })
@@ -247,32 +252,36 @@ new aws.iam.RolePolicyAttachment('autoscaler-role-attach-policy', {
   role: autoscalerRole.name
 });
 
-const autoscaler = new k8s.helm.v3.Chart('autoscaler', {
-  namespace: kubeSystemNamespace,
-  chart: 'cluster-autoscaler',
-  fetchOpts: {
-    repo: 'https://kubernetes.github.io/autoscaler'
-  },
-  version: '9.10.7',
-  values: {
-    cloudProvider: 'aws',
-    rbac: {
-      serviceAccount: {
-        annotations: {
-          'eks.amazonaws.com/role-arn': autoscalerRole.arn
-        }
-      }
+const autoscaler = new k8s.helm.v3.Chart(
+  'autoscaler',
+  {
+    namespace: kubeSystemNamespace,
+    chart: 'cluster-autoscaler',
+    fetchOpts: {
+      repo: 'https://kubernetes.github.io/autoscaler'
     },
-    awsRegion: config.get("aws.region"),
-    autoDiscovery: {
-      enabled: true,
-      clusterName: cluster.eksCluster.name
+    version: '9.10.7',
+    values: {
+      cloudProvider: 'aws',
+      rbac: {
+        serviceAccount: {
+          annotations: {
+            'eks.amazonaws.com/role-arn': autoscalerRole.arn
+          }
+        }
+      },
+      awsRegion: config.get('aws.region'),
+      autoDiscovery: {
+        enabled: true,
+        clusterName: cluster.eksCluster.name
+      }
     }
+  },
+  {
+    provider: cluster.provider,
+    dependsOn: [cluster, metricsServerChart]
   }
-}, {
-  provider: cluster.provider,
-  dependsOn: [cluster, metricsServerChart]
-});
+);
 
 // Setup Istio
 const aiIstioNs = new k8s.core.v1.Namespace(
@@ -325,7 +334,7 @@ const istio = new k8s.helm.v3.Release(
     repositoryOpts: {
       repo: 'https://getindata.github.io/helm-charts/'
     },
-    values: {},
+    values: {}
   },
   {
     dependsOn: [aiIstioNs, cluster],
@@ -341,14 +350,13 @@ const kiali = new k8s.helm.v3.Release(
     repositoryOpts: {
       repo: 'https://kiali.org/helm-charts/'
     },
-    values: {},
+    values: {}
   },
   {
     dependsOn: [istio, cluster],
     provider: cluster.provider
   }
 );
-
 
 //Put DB Secrets in Infra Namespace
 const secretInfra = new kx.Secret(
@@ -365,9 +373,9 @@ const secretInfra = new kx.Secret(
       namespace: aiInfraNs.id
     }
   },
-  { 
-    dependsOn: [cluster], 
-    provider: cluster.provider 
+  {
+    dependsOn: [cluster],
+    provider: cluster.provider
   }
 );
 
@@ -384,10 +392,11 @@ const secretApps = new kx.Secret(
     },
     metadata: {
       namespace: aiAppsNs.id
-    },
-  }, { 
-    dependsOn: [cluster], 
-    provider: cluster.provider 
+    }
+  },
+  {
+    dependsOn: [cluster],
+    provider: cluster.provider
   }
 );
 
@@ -451,3 +460,36 @@ const seldonChart = new k8s.helm.v3.Release(
   }
 );
 
+// Install Spark Operator
+const sparkOperatorRelease = new k8s.helm.v3.Chart(
+  'spark-operator',
+  {
+    chart: 'spark-operator',
+    version: '1.1.6',
+    namespace: aiInfraNs.id,
+    fetchOpts: {
+      repo: 'https://googlecloudplatform.github.io/spark-on-k8s-operator'
+    },
+    values: {
+      istio: {
+        enabled: true
+      },
+      image: {
+        tag: 'v1beta2-1.2.3-3.1.1'
+      },
+      sparkJobNamespace: aiAppsNs.id,
+      serviceAccounts: {
+        spark: {
+          name: 'spark'
+        },
+        sparkoperator: {
+          name: 'spark-operator'
+        }
+      }
+    }
+  },
+  {
+    dependsOn: [istio, cluster],
+    provider: cluster.provider
+  }
+);
