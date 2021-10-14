@@ -462,7 +462,7 @@ const sparkOperatorRelease = new k8s.helm.v3.Chart(
         enabled: true
       },
       image: {
-        tag: 'v1beta2-1.1.2-2.4.5'
+        tag: 'v1beta2-1.2.3-3.1.1'
       },
       sparkJobNamespace: aiAppsNs.id,
       serviceAccounts: {
