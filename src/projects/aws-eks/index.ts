@@ -435,6 +435,7 @@ const jxgit = new k8s.helm.v3.Chart(
 const seldonChart = new k8s.helm.v3.Release(
   'aiinfra-seldon',
   {
+    name: 'aiinfra-seldon',
     chart: 'seldon-core-operator',
     version: '1.11',
     namespace: aiInfraNs.id,
@@ -461,7 +462,7 @@ const seldonChart = new k8s.helm.v3.Release(
 );
 
 // Install Spark Operator
-const sparkOperatorRelease = new k8s.helm.v3.Chart(
+const sparkOperatorChart = new k8s.helm.v3.Chart(
   'spark-operator',
   {
     chart: 'spark-operator',
