@@ -6,6 +6,7 @@ import * as k8s from '@pulumi/kubernetes';
 import * as kx from '@pulumi/kubernetesx';
 import { Config, Output } from '@pulumi/pulumi';
 import * as random from '@pulumi/random';
+import * as identity from './identity';
 
 const awsConfig = new Config("aws");
 const jxConfig = new Config("jx")
@@ -54,7 +55,8 @@ const cluster = new eks.Cluster(`ai-eks-cluster-${pulumiStack}`, {
   vpcId: vpc.id,
   privateSubnetIds: vpc.privateSubnetIds,
   publicSubnetIds: vpc.publicSubnetIds,
-  nodeAssociatePublicIpAddress: true,
+  nodeAssociatePublicIpAddress: false,
+  deployDashboard: false,
   createOidcProvider: true,
   enabledClusterLogTypes: [
     'api',
@@ -68,6 +70,18 @@ const cluster = new eks.Cluster(`ai-eks-cluster-${pulumiStack}`, {
     stack: pulumiStack
   },
   instanceRoles: [role],
+  roleMappings: [
+    {
+      roleArn: identity.adminsIamRoleArn,
+      groups: ["system:masters"],
+      username: "pulumi:admins",
+    },
+    {
+      roleArn: identity.devsIamRoleArn,
+      groups: ["pulumi:devs"],
+      username: "pulumi:alice",
+    },
+  ],
   providerCredentialOpts: {
     profileName: awsConfig.get('profile')
   }
@@ -85,8 +99,8 @@ const managedNodeGroup = eks.createManagedNodeGroup(
     nodeGroupName: `ai-eks-mng-${pulumiStack}`,
     nodeRoleArn: role.arn,
     labels: { ondemand: 'true' },
-    tags: { 
-      org: 'pulumi', 
+    tags: {
+      org: 'pulumi',
       managedBy: 'aitomatic',
       stack: 'pulumiStack'
     },
@@ -98,6 +112,7 @@ const managedNodeGroup = eks.createManagedNodeGroup(
   },
   cluster
 );
+
 
 // Export the cluster's kubeconfig.
 export const kubeconfig = cluster.kubeconfig;
@@ -152,6 +167,7 @@ const aiSystemNs = new k8s.core.v1.Namespace(
     provider: cluster.provider
   }
 );
+
 const aiInfraNs = new k8s.core.v1.Namespace(
   'aitomatic-infra',
   {
@@ -165,6 +181,21 @@ const aiInfraNs = new k8s.core.v1.Namespace(
     provider: cluster.provider
   }
 );
+
+const aiMonitorNs = new k8s.core.v1.Namespace(
+  'aitomatic-monitor',
+  {
+    metadata: {
+      name: 'aitomatic-monitor'
+    }
+  },
+  {
+    dependsOn: [cluster, managedNodeGroup],
+    provider: cluster.provider
+  }
+);
+
+
 const aiAppsNs = new k8s.core.v1.Namespace(
   'aitomatic-apps',
   {
@@ -178,6 +209,49 @@ const aiAppsNs = new k8s.core.v1.Namespace(
     provider: cluster.provider
   }
 );
+
+// Create a limited role for the `pulumi:devs` to use in the apps namespace.
+const roleNamespaces = [aiAppsNs.metadata.name];
+roleNamespaces.forEach((roleNs, index) => {
+  const devsGroupRole = new k8s.rbac.v1.Role(`pulumi-devs-${index}`,
+    {
+      metadata: { namespace: roleNs },
+      rules: [
+        {
+          apiGroups: [""],
+          resources: ["configmap", "pods", "secrets", "services", "persistentvolumeclaims"],
+          verbs: ["get", "list", "watch", "create", "update", "delete"],
+        },
+        {
+          apiGroups: ["rbac.authorization.k8s.io"],
+          resources: ["clusterrole", "clusterrolebinding", "role", "rolebinding"],
+          verbs: ["get", "list", "watch", "create", "update", "delete"],
+        },
+        {
+          apiGroups: ["extensions", "apps"],
+          resources: ["replicasets", "deployments"],
+          verbs: ["get", "list", "watch", "create", "update", "delete"],
+        },
+      ],
+    },
+    { provider: cluster.provider },
+  );
+
+  // Bind the `pulumi:devs` RBAC group to the new, limited role.
+  const devsGroupRoleBinding = new k8s.rbac.v1.RoleBinding(`pulumi-devs-${index}`,
+    {
+      metadata: { namespace: roleNs },
+      subjects: [{
+        kind: "Group",
+        name: "pulumi:devs",
+      }],
+      roleRef: {
+        apiGroup: "rbac.authorization.k8s.io",
+        kind: "Role",
+        name: devsGroupRole.metadata.name,
+      },
+    }, { provider: cluster.provider });
+});
 
 // Deploy metrics-server from Bitnami Helm Repo to aitomatic-system Namespace
 const metricsServerChart = new k8s.helm.v3.Chart(
@@ -291,6 +365,153 @@ const autoscaler = new k8s.helm.v3.Release('autoscaler', {
   dependsOn: [cluster, metricsServerChart]
 });
 
+
+
+function elasticInstall(releaseName: string, chart: string, values: { [key: string]: any; } = {}) {
+  return new k8s.helm.v3.Release(
+    releaseName,
+    {
+      chart: chart,
+      namespace: aiMonitorNs.id,
+      repositoryOpts: {
+        repo: 'https://helm.elastic.co'
+      },
+      values: values,
+    },
+    {
+      dependsOn: [aiMonitorNs, cluster],
+      provider: cluster.provider
+    }
+  );
+}
+
+const mbeatYaml = `
+metricbeat.modules:
+  - module: kubernetes
+    metricsets:
+      - container
+      - node
+      - pod
+      - system
+      - volume
+    period: 10s
+    host: "\${NODE_NAME}"
+    hosts: ["https://\${NODE_NAME}:10250"]
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    ssl.verification_mode: "none"
+    processors:
+      - add_kubernetes_metadata: ~
+  - module: kubernetes
+    enabled: true
+    metricsets:
+      - event
+  - module: system
+    period: 10s
+    metricsets:
+      - cpu
+      - load
+      - memory
+      - network
+      - process
+      - process_summary
+    processes: ['.*']
+    process.include_top_n:
+      by_cpu: 5
+      by_memory: 5
+  - module: system
+    period: 1m
+    metricsets:
+      - filesystem
+      - fsstat
+    processors:
+    - drop_event.when.regexp:
+        system.filesystem.mount_point: '^/(sys|cgroup|proc|dev|etc|host|lib)($|/)'
+  - module: prometheus 
+    metricsets: ["remote_write"] 
+    host: "localhost" 
+    port: "9201"
+output.elasticsearch:
+  hosts: '\${ELASTICSEARCH_HOSTS:elasticsearch-master:9200}'
+  username: '\${ELASTICSEARCH_USERNAME}'
+  password: '\${ELASTICSEARCH_PASSWORD}'
+`;
+
+
+const mbeatValues = {
+  deamonset: {
+    metricbeatConfig: {
+      'metricbeat.yml': mbeatYaml
+    }
+  }
+};
+
+const apmServerValues = {
+  fullnameOverride: "apm-server"
+}
+
+const elasticSearch = elasticInstall("elastic-search", "elasticsearch");
+const apmServer = elasticInstall("apm-server", "apm-server", apmServerValues);
+const metricBeat = elasticInstall("metricbeat", "metricbeat", mbeatValues);
+const fileBeat = elasticInstall("filebeat", "filebeat");
+const kibana = elasticInstall("kibana", "kibana");
+
+const prometheus = new k8s.helm.v3.Release(
+  'prometheus',
+  {
+    chart: 'kube-prometheus-stack',
+    namespace: aiMonitorNs.id,
+    repositoryOpts: {
+      repo: 'https://prometheus-community.github.io/helm-charts'
+    },
+    values: {
+      prometheus: {
+        prometheusSpec: {
+          remote_write: [{
+            url: "http://localhost:9201/write"
+          }]
+        }
+      }
+    }
+  },
+  {
+    dependsOn: [aiMonitorNs, cluster],
+    provider: cluster.provider
+  }
+);
+
+const jaeger = new k8s.helm.v3.Release(
+  'jaeger',
+  {
+    chart: 'jaeger',
+    namespace: aiMonitorNs.id,
+    repositoryOpts: {
+      repo: 'https://jaegertracing.github.io/helm-charts'
+    },
+    values: {
+      provisionDataStore: {
+        cassandra: false,
+        elasticsearch: false
+      },
+      collector: {
+        enabled: false,
+
+      },
+      query: {
+        enabled: false,
+      },
+      agent: {
+        cmdlineParams: {
+          'reporter.grpc.host-port': "apm-server:8200"
+        }
+      }
+    }
+  },
+  {
+    dependsOn: [aiMonitorNs, cluster],
+    provider: cluster.provider
+  }
+);
+
 // Setup Istio
 const aiIstioNs = new k8s.core.v1.Namespace(
   'istio-system',
@@ -400,7 +621,7 @@ const secretApps = new kx.Secret(
     },
     metadata: {
       namespace: aiAppsNs.id
-    }
+    },
   },
   {
     dependsOn: [cluster],
@@ -420,7 +641,7 @@ const jxGitopNs = new k8s.core.v1.Namespace(
   }
 );
 
-const jxgit = new k8s.helm.v3.Release(  
+const jxgit = new k8s.helm.v3.Release(
   'jxgo',
   {
     chart: 'jx-git-operator',
