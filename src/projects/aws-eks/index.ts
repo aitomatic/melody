@@ -486,6 +486,9 @@ const sparkOperatorChart = new k8s.helm.v3.Chart(
         sparkoperator: {
           name: 'spark-operator'
         }
+      },
+      webhook: {
+        enable: true
       }
     }
   },
