@@ -4,9 +4,14 @@ runtime:
 description: MLOps Infra for Aitomatic Cloud
 template:
   config:
-    aws:region:
-      description: The AWS region to deploy into
-      default: us-east-2
+    aws:
+      region:
+        description: The AWS region to deploy into
+        default: us-west-2
+    ai:  
+      parentzone:
+        description: The base domain for the platform
+        default: cc.aitomatic.com
     jx:
       giturl: 
         description: The GitHub URL for the Repo
@@ -15,5 +20,16 @@ template:
         description: The GitHub Bot username
       gittoken:
         description: The Github Bot API Token
-      
+    github:
+      clientid:
+        description: Github OAuth App client ID for this deployment
+      clientsecret:
+        description: Github OAuth App client Secret
+      githuborgs:
+        description: The org or team to which the access should be restricted. 
+          This is either just `org_a` for restricting access to organization org_a 
+          or `org_a:team_1` to restrict access to team_1 in org_a.
+          reference - https://github.com/jupyterhub/oauthenticator/blob/master/docs/source/github.md
+          This will be of the format - '["org_a:team_1", "org_b"]'
+
       

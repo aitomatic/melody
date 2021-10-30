@@ -10,21 +10,51 @@ import * as identity from './identity';
 
 const awsConfig = new Config("aws");
 const jxConfig = new Config("jx")
+const aiConfig = new Config("ai");
+const githubConfig = new Config("github");
+
 const kubeSystemNamespace = 'kube-system';
 const pulumiStack = pulumi.getStack();
 
 const awsRegion = awsConfig.get('region');
+
+const aiParentZone = aiConfig.get('parentzone');
+
 const jxGitUrl = jxConfig.get('giturl');
 const jsGitUsername = jxConfig.get('gitusername');
 const jxGitToken = jxConfig.getSecret('gittoken');
+
+const githubClientId = githubConfig.get('clientid');
+const githubClientSecret = githubConfig.getSecret('clientsecret');
+const githubOrgs = githubConfig.getObject('orgs')
 
 // Create a new VPC for the cluster.
 const vpc = new awsx.ec2.Vpc(`ai-eks-vpc-${pulumiStack}`, {
   numberOfNatGateways: 1,
   tags: {
     managedBy: 'aitomatic',
-    stack: pulumiStack
+    stack: pulumiStack,
+    Name: `ai-eks-vpc-${pulumiStack}`,
   },
+});
+
+const ecrPolicy = new aws.iam.Policy(`${pulumiStack}-ecrcreate-policy`, {
+  description: pulumi.interpolate`External DNS policy for ${pulumiStack}`,
+  policy: JSON.stringify({
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Action": [
+          "ecr:CreateRepository",
+          "ecr:PutLifecyclePolicy"
+        ],
+        "Resource": [
+          "*"
+        ]
+      }
+    ]
+  })
 });
 
 // IAM roles for the node group
@@ -41,7 +71,9 @@ let counter = 0;
 for (const policyArn of [
   'arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy',
   'arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy',
-  'arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly'
+  'arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly',
+  'arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser',
+  ecrPolicy.arn
 ]) {
   new aws.iam.RolePolicyAttachment(
     `ai-eks-ngrole-policy-${pulumiStack}-${counter++}`,
@@ -87,35 +119,27 @@ const cluster = new eks.Cluster(`ai-eks-cluster-${pulumiStack}`, {
   }
 });
 
-// Create a simple AWS managed node group using a cluster as input.
-const defaultAsgMin = 2;
-const defaultAsgMax = 20;
-const defaultAsgDesired = 3;
-
-const managedNodeGroup = eks.createManagedNodeGroup(
-  `ai-eks-mng-${pulumiStack}`,
-  {
-    cluster: cluster,
-    nodeGroupName: `ai-eks-mng-${pulumiStack}`,
-    nodeRoleArn: role.arn,
-    labels: { ondemand: 'true' },
-    tags: {
-      org: 'pulumi',
-      managedBy: 'aitomatic',
-      stack: 'pulumiStack'
-    },
-    scalingConfig: {
-      minSize: defaultAsgMin,
-      maxSize: defaultAsgMax,
-      desiredSize: defaultAsgDesired,
-    },
-  },
-  cluster
-);
-
-
 // Export the cluster's kubeconfig.
 export const kubeconfig = cluster.kubeconfig;
+
+//Export profile to add to ~/.aws/config
+export const awsProfileSnippet = pulumi.interpolate`
+[profile ${pulumiStack}]
+region = ${awsRegion}
+output = json
+role_arn = ${identity.adminsIamRoleArn}
+source_profile = default
+`
+
+//Export commands to setup KUBECONFIG
+export const kubeConfigSetup = `
+$ pulumi stack output kubeconfig > kubeconfig-${pulumiStack}
+$ export KUBECONFIG=\`pwd\`/kubeconfig-${pulumiStack}
+`
+
+const clusterOidcProvider = cluster.core.oidcProvider;
+const clusterOidcProviderUrl = clusterOidcProvider.url;
+const clusterOidcArn = clusterOidcProvider.arn;
 
 // Create PostgreSQL database for System
 const dbPassword = new random.RandomPassword('aitomatic-system-db-password', {
@@ -132,8 +156,7 @@ const dbSubnetGroup = new aws.rds.SubnetGroup(`ai-db-sn-${pulumiStack}`, {
   }
 });
 
-
-const db = new aws.rds.Instance(`ai-db-${pulumiStack}`, {
+const db = new aws.rds.Instance(`aidb-${pulumiStack}`, {
   allocatedStorage: 10,
   maxAllocatedStorage: 100,
   engine: 'postgres',
@@ -151,6 +174,202 @@ const db = new aws.rds.Instance(`ai-db-${pulumiStack}`, {
     managedBy: 'aitomatic',
     stack: pulumiStack
   }
+});
+
+// Create a simple AWS managed node group using a cluster as input.
+const defaultAsgMin = 6;
+const defaultAsgMax = 30;
+const defaultAsgDesired = 6;
+
+const managedNodeGroup = eks.createManagedNodeGroup(
+  `ai-eks-mng-${pulumiStack}`,
+  {
+    cluster: cluster,
+    nodeGroupName: `ai-eks-mng-${pulumiStack}`,
+    nodeRoleArn: role.arn,
+    labels: { ondemand: 'true' },
+    tags: {
+      org: 'pulumi',
+      managedBy: 'aitomatic',
+      stack: `${pulumiStack}`
+    },
+    scalingConfig: {
+      minSize: defaultAsgMin,
+      maxSize: defaultAsgMax,
+      desiredSize: defaultAsgDesired,
+    },
+    instanceTypes: ['t3a.large'],
+    diskSize: 40
+  },
+  cluster
+);
+
+const ednsAssumeRolePolicy = pulumi.all([clusterOidcProviderUrl, clusterOidcArn]).apply(([url, arn]) => aws.iam.getPolicyDocument({
+  statements: [
+    {
+      effect: 'Allow',
+      principals: [
+        {
+          identifiers: [arn],
+          type: 'Federated'
+        }
+      ],
+      actions: ['sts:AssumeRoleWithWebIdentity'],
+      conditions: [
+        {
+          test: 'StringLike',
+          values: ['system:serviceaccount:kube-system:*'],
+          variable: `${url}:sub`
+        }
+      ],
+    }
+  ]
+})
+);
+
+const ednsRole = new aws.iam.Role(`${pulumiStack}-edns`, {
+  assumeRolePolicy: ednsAssumeRolePolicy.json
+});
+
+const ednsPolicy = new aws.iam.Policy(`${pulumiStack}-edns-policy`, {
+  description: pulumi.interpolate`External DNS policy for ${cluster.eksCluster.id}`,
+  policy: JSON.stringify({
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Action": [
+          "route53:GetHostedZone",
+          "route53:ListHostedZonesByName",
+          "route53:CreateHostedZone",
+          "route53:DeleteHostedZone",
+          "route53:ChangeResourceRecordSets",
+          "route53:CreateHealthCheck",
+          "route53:GetHealthCheck",
+          "route53:DeleteHealthCheck",
+          "route53:UpdateHealthCheck",
+          "ec2:DescribeVpcs",
+          "ec2:DescribeRegions",
+          "servicediscovery:*"
+        ],
+        "Resource": [
+          "*"
+        ]
+      }
+    ]
+  })
+});
+
+new aws.iam.RolePolicyAttachment(`${pulumiStack}-edns-role-attach-policy`, {
+  policyArn: ednsPolicy.arn,
+  role: ednsRole.name
+});
+
+const clientEnvDomain = `${pulumiStack}.${aiParentZone}`;
+
+const ednsPublicCloudMapNs = new aws.servicediscovery.PublicDnsNamespace(
+  `${pulumiStack}-public-external-dns`,
+  {
+    name: clientEnvDomain,
+    description: `Cloud Map Namespace to support External DNS for ${pulumiStack}`,
+    tags: {
+      managedBy: 'aitomatic',
+      stack: pulumiStack
+    }
+  }
+);
+
+const parentZone = aws.route53.getZone({ name: aiParentZone });
+const ednsHostedZone = ednsPublicCloudMapNs.hostedZone.apply(ehz => aws.route53.getZone({ zoneId: ehz }));
+
+const ednsNsRecord = new aws.route53.Record(`${pulumiStack}-edns-ns-record`, {
+  allowOverwrite: true,
+  name: clientEnvDomain,
+  ttl: 8600,
+  type: "NS",
+  zoneId: parentZone.then(z => z.id),
+  records: [
+    ednsHostedZone.nameServers[0],
+    ednsHostedZone.nameServers[1],
+    ednsHostedZone.nameServers[2],
+    ednsHostedZone.nameServers[3],
+  ],
+});
+
+const ednsPrivateCloudMapNs = new aws.servicediscovery.PrivateDnsNamespace(
+  `${pulumiStack}-private-external-dns`,
+  {
+    name: `private.${clientEnvDomain}`,
+    description: `Cloud Map Namespace to support External DNS for ${pulumiStack}`,
+    vpc: vpc.id,
+    tags: {
+      managedBy: 'aitomatic',
+      stack: pulumiStack
+    }
+  }
+);
+
+const ednsSA = new k8s.core.v1.ServiceAccount(
+  'external-dns-sa',
+  {
+    metadata: {
+      name: 'external-dns',
+      namespace: kubeSystemNamespace,
+      annotations: {
+        'eks.amazonaws.com/role-arn': ednsRole.arn
+      }
+    }
+  }, {
+  dependsOn: [cluster, managedNodeGroup],
+  provider: cluster.provider
+});
+
+const ednsClusterRole = new k8s.rbac.v1.ClusterRole(
+  'external-dns-cr',
+  {
+    metadata: { name: 'external-dns' },
+    rules: [{
+      apiGroups: [""],
+      resources: ["services", "endpoints", "pods"],
+      verbs: ["get", "watch", "list"]
+    }, {
+      apiGroups: ["extensions", "networking.k8s.io"],
+      resources: ["ingresses"],
+      verbs: ["get", "watch", "list"]
+    }, {
+      apiGroups: [""],
+      resources: ["nodes"],
+      verbs: ["get", "watch", "list"]
+    }, {
+      apiGroups: ["networking.istio.io"],
+      resources: ["gateways", "virtualservices"],
+      verbs: ["get", "watch", "list"]
+    }
+    ]
+  }, {
+  dependsOn: [cluster, managedNodeGroup],
+  provider: cluster.provider
+});
+
+const ednsCRB = new k8s.rbac.v1.ClusterRoleBinding(
+  'external-dns-crb',
+  {
+    metadata: { name: 'external-dns' },
+    roleRef: {
+      apiGroup: 'rbac.authorization.k8s.io',
+      kind: 'ClusterRole',
+      name: 'external-dns'
+    },
+    subjects: [
+      {
+        kind: 'ServiceAccount',
+        name: 'external-dns',
+        namespace: kubeSystemNamespace
+      }
+    ]
+  }, {
+  dependsOn: [cluster, managedNodeGroup],
+  provider: cluster.provider
 });
 
 // Create namespaces
@@ -271,11 +490,60 @@ const metricsServerChart = new k8s.helm.v3.Chart(
   }
 );
 
-// Setup Kubernetes Autoscaler
+const ednsRelease = new k8s.helm.v3.Release(
+  'edns',
+  {
+    chart: 'external-dns',
+    version: '1.3.2',
+    namespace: kubeSystemNamespace,
+    name: 'external-dns',
+    repositoryOpts: {
+      repo: 'https://kubernetes-sigs.github.io/external-dns/'
+    },
+    values: {
+      provider: 'aws-sd',
+      domainFilters: [clientEnvDomain],
+      serviceAccount: {
+        create: false,
+        name: 'external-dns'
+      },
+      rbac: {
+        create: false
+      },
+      env: [{
+        name: 'AWS_REGION',
+        value: awsRegion
+      }],
+      sources: ['service', 'ingress', 'istio-gateway', 'istio-virtualservice']
+    },
+    skipAwait: true,
+  },
+  {
+    dependsOn: [cluster, aiSystemNs, ednsRole],
+    provider: cluster.provider
+  }
+);
 
-const clusterOidcProvider = cluster.core.oidcProvider;
-const clusterOidcProviderUrl = clusterOidcProvider.url;
-const clusterOidcArn = clusterOidcProvider.arn;
+// Kubernetes Dashboard
+
+const k8sDash = new k8s.helm.v3.Chart(
+  'kubesys-dash',
+  {
+    chart: 'kubernetes-dashboard',
+    version: '5.0.3',
+    namespace: kubeSystemNamespace,
+    fetchOpts: {
+      repo: 'https://kubernetes.github.io/dashboard/'
+    },
+    values: {},
+  },
+  {
+    dependsOn: [cluster, aiSystemNs, metricsServerChart],
+    provider: cluster.provider
+  }
+);
+
+// Setup Kubernetes Autoscaler
 
 const autoscalerAssumeRolePolicy = pulumi
   .all([clusterOidcProviderUrl, clusterOidcArn])
@@ -305,11 +573,11 @@ const autoscalerAssumeRolePolicy = pulumi
     })
   );
 
-const autoscalerRole = new aws.iam.Role('cluster-autoscaler', {
+const autoscalerRole = new aws.iam.Role(`${pulumiStack}-autoscaler`, {
   assumeRolePolicy: autoscalerAssumeRolePolicy.json
 });
 
-const autoscalerPolicy = new aws.iam.Policy('autoscaler-policy', {
+const autoscalerPolicy = new aws.iam.Policy(`${pulumiStack}-autoscaler-policy`, {
   description: pulumi.interpolate`Autoscaler policy for ${cluster.eksCluster.id}`,
   policy: JSON.stringify({
     Version: '2012-10-17',
@@ -331,7 +599,7 @@ const autoscalerPolicy = new aws.iam.Policy('autoscaler-policy', {
   })
 });
 
-new aws.iam.RolePolicyAttachment('autoscaler-role-attach-policy', {
+new aws.iam.RolePolicyAttachment(`${pulumiStack}-autoscaler-role-attach-policy`, {
   policyArn: autoscalerPolicy.arn,
   role: autoscalerRole.name
 });
@@ -377,6 +645,7 @@ function elasticInstall(releaseName: string, chart: string, values: { [key: stri
         repo: 'https://helm.elastic.co'
       },
       values: values,
+      skipAwait: true,
     },
     {
       dependsOn: [aiMonitorNs, cluster],
@@ -563,7 +832,8 @@ const istio = new k8s.helm.v3.Release(
     repositoryOpts: {
       repo: 'https://getindata.github.io/helm-charts/'
     },
-    values: {}
+    values: {},
+    skipAwait: true,
   },
   {
     dependsOn: [aiIstioNs, cluster],
@@ -579,7 +849,11 @@ const kiali = new k8s.helm.v3.Release(
     repositoryOpts: {
       repo: 'https://kiali.org/helm-charts/'
     },
-    values: {}
+    values: {
+      auth: {
+        strategy: 'anonymous'
+      }
+    },
   },
   {
     dependsOn: [istio, cluster],
@@ -642,7 +916,7 @@ const jxGitopNs = new k8s.core.v1.Namespace(
 );
 
 const jxgit = new k8s.helm.v3.Release(
-  'jxgo',
+  'jx3',
   {
     chart: 'jx-git-operator',
     namespace: jxGitopNsName,
@@ -720,6 +994,69 @@ const sparkOperatorChart = new k8s.helm.v3.Chart(
   },
   {
     dependsOn: [istio, cluster],
+    provider: cluster.provider
+  }
+);
+
+// Setup Istio
+const jhNs = new k8s.core.v1.Namespace(
+  'jupyterhub',
+  {
+    metadata:
+    {
+      name: 'jupyterhub',
+      labels: { 'istio-injection': 'disabled' }
+    }
+  },
+  {
+    provider: cluster.provider,
+    dependsOn: [cluster, managedNodeGroup]
+  }
+);
+
+
+const jh = new k8s.helm.v3.Release(
+  'jupyterhub',
+  {
+    chart: 'jupyterhub',
+    name: 'jupyterhub',
+    namespace: jhNs.id,
+    version: '1.1.3',
+    repositoryOpts: {
+      repo: 'https://jupyterhub.github.io/helm-chart/'
+    },
+    values: {
+      hub: {
+        config: {
+          GitHubOAuthenticator: {
+            client_id: githubClientId,
+            client_secret: githubClientSecret,
+            oauth_callback_url: `http://hub.${clientEnvDomain}/hub/oauth_callback`,
+            allowed_organizations: githubOrgs
+          },
+          JupyterHub: {
+            authenticator_class: 'github'
+          }
+        },
+      },
+      prePuller: {
+        hook: {
+          enabled: false
+        }
+      },
+      ingress: {
+        enabled: true,
+        annotations: {
+          'kubernetes.io/ingress.class': 'istio',
+          'external-dns.alpha.kubernetes.io/hostname': `hub.${clientEnvDomain}`,
+        },
+        hosts: [`hub.${clientEnvDomain}`]
+      },
+    },
+    skipAwait: true,
+  },
+  {
+    dependsOn: [cluster, istio, aiInfraNs],
     provider: cluster.provider
   }
 );
