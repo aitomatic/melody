@@ -135,4 +135,7 @@ Pulumi.*.yaml
 
 # NPM stuff
 node_modules/
-kubeconfig
+
+#Working files
+kubeconfig*
+**/*.stack
