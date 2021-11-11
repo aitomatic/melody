@@ -27,10 +27,11 @@ $ export PULUMI_CONFIG_PASSPHRASE=<value>
 $ pulumi stack init
 ```
 
-6. Setup AWS Region for Pulumi
+6. Setup AWS Region and domain
 
 ```
 $ pulumi config set aws:region us-west-2
+$ pulumi config set ai:parentzone cc.aitomatic.com
 ```
 
 if you are not using default profile
@@ -48,11 +49,20 @@ Use the AI Engineer Bot account creds for Github.
 
 ```
 $ pulumi config set jx:giturl <git_repo_url>
-$ pulumi config set jx:gitusername <git_bot_username>
+$ pulumi config set jx:gitusername <git_bot_username> --secret
 $ pulumi config set jx:gittoken <git_bot_token>
 ```
 
-8. It will take 15-20 minutes, once the infra is up and running, you can go to AWS and see the cluster, RDS and all other components.
+8. Configure github Authentication for JupyterHub
+Create a GitHub OAuth App used for Jupyter Auth and set these values from that App -
+
+```shell
+
+pulumi config set github:clientid
+pulumi config set github:clientsecret
+```
+
+9. It will take 15-20 minutes, once the infra is up and running, you can go to AWS and see the cluster, RDS and all other components.
 
 ```
 $ pulumi up
