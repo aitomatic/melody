@@ -869,7 +869,7 @@ const secretInfra = new kx.Secret(
       'aitomatic-db-user': db.username,
       'aitomatic-db-password': db.password,
       'aitomatic-db-host': db.address,
-      'aitomatic-db-port': db.port.apply((x) => `x`),
+      'aitomatic-db-port': db.port.apply((x) => `${x}`),
       'aitomatic-db-dbname': db.id
     },
     metadata: {
@@ -891,7 +891,7 @@ const secretApps = new kx.Secret(
       'aitomatic-db-password': db.password,
       'aitomatic-db-host': db.address,
       'aitomatic-db-port': db.port.apply((p) => `${p}`),
-      'aitomatic-db-dbname': db.name
+      'aitomatic-db-dbname': db.id
     },
     metadata: {
       namespace: aiAppsNs.id
