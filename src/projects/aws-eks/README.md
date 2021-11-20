@@ -49,8 +49,8 @@ Use the AI Engineer Bot account creds for Github.
 
 ```
 $ pulumi config set jx:giturl <git_repo_url>
-$ pulumi config set jx:gitusername <git_bot_username> --secret
-$ pulumi config set jx:gittoken <git_bot_token>
+$ pulumi config set jx:gitusername <git_bot_username>
+$ pulumi config set jx:gittoken <git_bot_token> --secret
 ```
 
 8. Configure github Authentication for JupyterHub
