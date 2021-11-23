@@ -965,41 +965,41 @@ const seldonChart = new k8s.helm.v3.Release(
 );
 
 // Install Spark Operator
-const sparkOperatorChart = new k8s.helm.v3.Chart(
-  'spark-operator',
-  {
-    chart: 'spark-operator',
-    version: '1.1.6',
-    namespace: aiInfraNs.id,
-    fetchOpts: {
-      repo: 'https://googlecloudplatform.github.io/spark-on-k8s-operator'
-    },
-    values: {
-      istio: {
-        enabled: true
-      },
-      image: {
-        tag: 'v1beta2-1.2.3-3.1.1'
-      },
-      sparkJobNamespace: aiAppsNs.id,
-      serviceAccounts: {
-        spark: {
-          name: 'spark'
-        },
-        sparkoperator: {
-          name: 'spark-operator'
-        }
-      },
-      webhook: {
-        enable: true
-      }
-    }
-  },
-  {
-    dependsOn: [istio, cluster],
-    provider: cluster.provider
-  }
-);
+// const sparkOperatorChart = new k8s.helm.v3.Chart(
+//   'spark-operator',
+//   {
+//     chart: 'spark-operator',
+//     version: '1.1.6',
+//     namespace: aiInfraNs.id,
+//     fetchOpts: {
+//       repo: 'https://googlecloudplatform.github.io/spark-on-k8s-operator'
+//     },
+//     values: {
+//       istio: {
+//         enabled: true
+//       },
+//       image: {
+//         tag: 'v1beta2-1.2.3-3.1.1'
+//       },
+//       sparkJobNamespace: aiAppsNs.id,
+//       serviceAccounts: {
+//         spark: {
+//           name: 'spark'
+//         },
+//         sparkoperator: {
+//           name: 'spark-operator'
+//         }
+//       },
+//       webhook: {
+//         enable: true
+//       }
+//     }
+//   },
+//   {
+//     dependsOn: [istio, cluster],
+//     provider: cluster.provider
+//   }
+// );
 
 // Setup Jupyterhub
 const jhNs = new k8s.core.v1.Namespace(
