@@ -720,8 +720,8 @@ const apmServerValues = {
 
 const elasticSearch = elasticInstall("elastic-search", "elasticsearch");
 const apmServer = elasticInstall("apm-server", "apm-server", apmServerValues);
-const metricBeat = elasticInstall("metricbeat", "metricbeat", mbeatValues);
-const fileBeat = elasticInstall("filebeat", "filebeat");
+// const metricBeat = elasticInstall("metricbeat", "metricbeat", mbeatValues);
+// const fileBeat = elasticInstall("filebeat", "filebeat");
 const kibana = elasticInstall("kibana", "kibana");
 
 const prometheus = new k8s.helm.v3.Release(
@@ -1001,7 +1001,7 @@ const sparkOperatorChart = new k8s.helm.v3.Chart(
   }
 );
 
-// Setup Istio
+// Setup Jupyterhub
 const jhNs = new k8s.core.v1.Namespace(
   'jupyterhub',
   {
