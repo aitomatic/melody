@@ -1063,3 +1063,68 @@ const jh = new k8s.helm.v3.Release(
     provider: cluster.provider
   }
 );
+
+// Install fluent-bit
+const fluentbitOutputConfig = `
+[OUTPUT]
+    Name es
+    Match kube.*
+    Host elasticsearch-master
+    # Trace_Output On
+    Trace_Error On
+    Logstash_Format On
+    Retry_Limit False
+    Replace_Dots On
+    
+[OUTPUT]
+    Name es
+    Match host.*
+    Host elasticsearch-master
+    # Trace_Output On
+    Trace_Error On
+    Logstash_Format On
+    Logstash_Prefix node
+    Retry_Limit False
+    Replace_Dots On
+`;
+
+const fluentbit = new k8s.helm.v3.Release(
+  'fluent-bit', {
+    chart: 'fluent-bit',
+    name: 'fluent-bit',
+    namespace: aiMonitorNs.metadata.name,
+    // version: '0.19.5',
+    repositoryOpts: {
+      repo: 'https://fluent.github.io/helm-charts/'
+    },
+    values: {
+      config: {
+        outputs: fluentbitOutputConfig
+      }
+    },
+  }, {
+    dependsOn: [cluster, aiMonitorNs, elasticSearch, kibana],
+    provider: cluster.provider
+  }
+);
+
+// const fluentBit = new k8s.helm.v3.Chart(
+//   'fluent-bit',
+//   {
+//     chart: 'fluent-bit',
+//     // namespace: aiMonitorNs.id,
+//     version: '0.19.5',
+//     fetchOpts:{
+//         repo: 'https://fluent.github.io/helm-charts/'
+//     },
+//     values: {
+//       config: {
+//         outputs: fluentbitOutputConfig
+//       }
+//     },
+//   },
+//   {
+//     dependsOn: [cluster, aiMonitorNs, elasticSearch, kibana],
+//     provider: cluster.provider
+//   }
+// );
