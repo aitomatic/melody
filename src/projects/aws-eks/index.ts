@@ -1040,6 +1040,22 @@ const jh = new k8s.helm.v3.Release(
 );
 
 // Install fluent-bit
+const fluentBitServiceConfig = `
+[SERVICE]
+    Daemon Off
+    Flush 1
+    Log_Level info
+    Parsers_File parsers.conf
+    Parsers_File custom_parsers.conf
+    HTTP_Server On
+    HTTP_Listen 0.0.0.0
+    HTTP_Port 2020
+    Health_Check On
+    storage.path /var/log/flb-storage/
+    storage.sync normal
+    storage.checksum off
+    storage.backlog.mem_limit 10M
+`;
 const fluentBitInputConfig = `
 [INPUT]
     Name tail
@@ -1048,6 +1064,7 @@ const fluentBitInputConfig = `
     Tag kube.*
     Mem_Buf_Limit 5MB
     Skip_Long_Lines On
+    storage.type filesystem
 
 [INPUT]
     Name systemd
@@ -1073,6 +1090,7 @@ const fluentBitOutputConfig = `
     Logstash_Prefix logs
     Retry_Limit False
     Replace_Dots On
+    storage.total_limit_size  10M
     
 [OUTPUT]
     Name es
@@ -1106,6 +1124,7 @@ const fluentBit = new k8s.helm.v3.Chart(
     },
     values: {
       config: {
+        service: fluentBitServiceConfig,
         inputs: fluentBitInputConfig,
         outputs: fluentBitOutputConfig
       }
