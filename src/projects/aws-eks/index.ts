@@ -1088,43 +1088,23 @@ const fluentbitOutputConfig = `
     Replace_Dots On
 `;
 
-const fluentbit = new k8s.helm.v3.Release(
-  'fluent-bit', {
+const fluentBit = new k8s.helm.v3.Chart(
+  'fluent-bit',
+  {
     chart: 'fluent-bit',
-    name: 'fluent-bit',
-    namespace: aiMonitorNs.metadata.name,
-    // version: '0.19.5',
-    repositoryOpts: {
-      repo: 'https://fluent.github.io/helm-charts/'
+    namespace: aiMonitorNs.id,
+    version: '0.19.5',
+    fetchOpts:{
+        repo: 'https://fluent.github.io/helm-charts/'
     },
     values: {
       config: {
         outputs: fluentbitOutputConfig
       }
     },
-  }, {
+  },
+  {
     dependsOn: [cluster, aiMonitorNs, elasticSearch, kibana],
     provider: cluster.provider
   }
 );
-
-// const fluentBit = new k8s.helm.v3.Chart(
-//   'fluent-bit',
-//   {
-//     chart: 'fluent-bit',
-//     // namespace: aiMonitorNs.id,
-//     version: '0.19.5',
-//     fetchOpts:{
-//         repo: 'https://fluent.github.io/helm-charts/'
-//     },
-//     values: {
-//       config: {
-//         outputs: fluentbitOutputConfig
-//       }
-//     },
-//   },
-//   {
-//     dependsOn: [cluster, aiMonitorNs, elasticSearch, kibana],
-//     provider: cluster.provider
-//   }
-// );
