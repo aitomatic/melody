@@ -636,12 +636,12 @@ const autoscaler = new k8s.helm.v3.Release('autoscaler', {
 
 
 function elasticInstall(releaseName: string, chart: string, values: { [key: string]: any; } = {}) {
-  return new k8s.helm.v3.Release(
+  return new k8s.helm.v3.Chart(
     releaseName,
     {
       chart: chart,
       namespace: aiMonitorNs.id,
-      repositoryOpts: {
+      fetchOpts:{
         repo: 'https://helm.elastic.co'
       },
       values: values,
