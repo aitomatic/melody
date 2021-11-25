@@ -1043,7 +1043,7 @@ const jh = new k8s.helm.v3.Release(
 const fluentBitServiceConfig = `
 [SERVICE]
     Daemon Off
-    Flush 1
+    Flush 5
     Log_Level info
     Parsers_File parsers.conf
     Parsers_File custom_parsers.conf
@@ -1060,7 +1060,7 @@ const fluentBitInputConfig = `
 [INPUT]
     Name tail
     Path /var/log/containers/*.log
-    multiline.parser docker, cri
+    multiline.parser docker, cri, python, go, java
     Tag kube.*
     Mem_Buf_Limit 5MB
     Skip_Long_Lines On
@@ -1079,6 +1079,25 @@ const fluentBitInputConfig = `
 [INPUT]
     Name mem
     Tag metrics.mem.*
+`;
+const fluentBitFilterConfig = `
+[FILTER]
+    Name kubernetes
+    Match kube.*
+    Merge_Log On
+    Keep_Log Off
+    K8S-Logging.Parser On
+    K8S-Logging.Exclude On
+
+[FILTER]
+    Name record_modifier
+    Match metrics.cpu.*
+    Record type CPU_USAGE
+
+[FILTER]
+    Name record_modifier
+    Match metrics.mem.*
+    Record type MEMORY_USAGE
 `;
 const fluentBitOutputConfig = `
 [OUTPUT]
@@ -1126,6 +1145,7 @@ const fluentBit = new k8s.helm.v3.Chart(
       config: {
         service: fluentBitServiceConfig,
         inputs: fluentBitInputConfig,
+        filters: fluentBitFilterConfig,
         outputs: fluentBitOutputConfig
       }
     }
