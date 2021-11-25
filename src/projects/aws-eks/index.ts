@@ -1060,7 +1060,7 @@ const fluentBitInputConfig = `
 [INPUT]
     Name tail
     Path /var/log/containers/*.log
-    multiline.parser docker, cri, python, go, java
+    multiline.parser docker,cri,python,go,java
     Tag kube.*
     Mem_Buf_Limit 5MB
     Skip_Long_Lines On
@@ -1088,6 +1088,12 @@ const fluentBitFilterConfig = `
     Keep_Log Off
     K8S-Logging.Parser On
     K8S-Logging.Exclude On
+
+[FILTER]
+    Name modify
+    Match kube.*
+    Condition Key_Exists log
+    Rename log message
 
 [FILTER]
     Name record_modifier
