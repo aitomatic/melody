@@ -1096,6 +1096,12 @@ const fluentBitFilterConfig = `
     Rename log message
 
 [FILTER]
+    Name modify
+    Match kube.*
+    Condition Key_Exists msg
+    Rename msg message
+
+[FILTER]
     Name record_modifier
     Match metrics.cpu.*
     Record type CPU_USAGE
