@@ -34,7 +34,8 @@ const vpc = new awsx.ec2.Vpc(`ai-eks-vpc-${pulumiStack}`, {
   tags: {
     managedBy: 'aitomatic',
     stack: pulumiStack,
-    Name: `ai-eks-vpc-${pulumiStack}`
+    Name: `ai-eks-vpc-${pulumiStack}`,
+    Project: pulumiStack
   }
 });
 
@@ -94,7 +95,8 @@ const cluster = new eks.Cluster(`ai-eks-cluster-${pulumiStack}`, {
   ],
   tags: {
     managedBy: 'aitomatic',
-    stack: pulumiStack
+    stack: pulumiStack,
+    Project: pulumiStack
   },
   instanceRoles: [role],
   roleMappings: [
@@ -147,7 +149,8 @@ const dbSubnetGroup = new aws.rds.SubnetGroup(`ai-db-sn-${pulumiStack}`, {
   tags: {
     Name: 'RDS Subnet Group',
     managedBy: 'aitomatic',
-    stack: pulumiStack
+    stack: pulumiStack,
+    Project: pulumiStack
   }
 });
 
@@ -167,7 +170,8 @@ const db = new aws.rds.Instance(`aidb-${pulumiStack}`, {
   dbSubnetGroupName: dbSubnetGroup.name,
   tags: {
     managedBy: 'aitomatic',
-    stack: pulumiStack
+    stack: pulumiStack,
+    Project: pulumiStack
   }
 });
 
@@ -186,7 +190,8 @@ const managedNodeGroup = eks.createManagedNodeGroup(
     tags: {
       org: 'pulumi',
       managedBy: 'aitomatic',
-      stack: `${pulumiStack}`
+      stack: `${pulumiStack}`,
+      Project: pulumiStack
     },
     scalingConfig: {
       minSize: defaultAsgMin,
@@ -270,7 +275,8 @@ const ednsPublicCloudMapNs = new aws.servicediscovery.PublicDnsNamespace(
     description: `Cloud Map Namespace to support External DNS for ${pulumiStack}`,
     tags: {
       managedBy: 'aitomatic',
-      stack: pulumiStack
+      stack: pulumiStack,
+      Project: pulumiStack
     }
   }
 );
@@ -302,7 +308,8 @@ const ednsPrivateCloudMapNs = new aws.servicediscovery.PrivateDnsNamespace(
     vpc: vpc.id,
     tags: {
       managedBy: 'aitomatic',
-      stack: pulumiStack
+      stack: pulumiStack,
+      Project: pulumiStack
     }
   }
 );
