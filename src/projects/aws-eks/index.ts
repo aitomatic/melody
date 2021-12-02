@@ -98,6 +98,13 @@ const cluster = new eks.Cluster(`ai-eks-cluster-${pulumiStack}`, {
     stack: pulumiStack,
     Project: pulumiStack
   },
+  nodeGroupOptions: {
+    autoScalingGroupTags: {
+      managedBy: 'aitomatic',
+      stack: pulumiStack,
+      Project: pulumiStack
+    }
+  },
   instanceRoles: [role],
   roleMappings: [
     {
