@@ -43,7 +43,9 @@ $ pulumi config set aws:profile <profile_name>
 
 7. Configure JenkinsX Operator
 
-JenkinsX uses GitOps for deployment. THis makes it a bit complex to accomodate in our workflow. If you are doing a development deployment, you can use this repo `https://github.com/Aitomatic/jx3-kubernetes.git` in case of new customer onboarding, please create a clone of this repo in the format  `https://github.com/Aitomatic/jx3-kubernetes-<customer>.git` and use that.
+JenkinsX uses GitOps for deployment. This makes it a bit complex to accommodate in our workflow. 
+Please use the template repo https://github.com/Aitomatic/ai-ci-cluster-template  and create a repo in the format  `https://github.com/Aitomatic/ai-ci-cluster-<customer>.git`.
+After creating the repo, update the file `jx-requirements.yml`. Some entries, such as region, env_name (i.e. cluster name) must be set. 
 
 Use the AI Engineer Bot account creds for Github.
 
@@ -85,6 +87,6 @@ kubectl get namespaces
 
 12. You can add JenkinsX plugin to Octant - https://github.com/jenkins-x-plugins/octant-jx
 
- 
+13. Once the cluster is up and running, you need to add the security group from the autoscaling nodes to the generated postgres cluster. Currently, this is not automated. 
 
 
