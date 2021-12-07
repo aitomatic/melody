@@ -34,7 +34,8 @@ const vpc = new awsx.ec2.Vpc(`ai-eks-vpc-${pulumiStack}`, {
   tags: {
     managedBy: 'aitomatic',
     stack: pulumiStack,
-    Name: `ai-eks-vpc-${pulumiStack}`
+    Name: `ai-eks-vpc-${pulumiStack}`,
+    Project: pulumiStack
   }
 });
 
@@ -94,7 +95,8 @@ const cluster = new eks.Cluster(`ai-eks-cluster-${pulumiStack}`, {
   ],
   tags: {
     managedBy: 'aitomatic',
-    stack: pulumiStack
+    stack: pulumiStack,
+    Project: pulumiStack
   },
   instanceRoles: [role],
   roleMappings: [
@@ -147,7 +149,8 @@ const dbSubnetGroup = new aws.rds.SubnetGroup(`ai-db-sn-${pulumiStack}`, {
   tags: {
     Name: 'RDS Subnet Group',
     managedBy: 'aitomatic',
-    stack: pulumiStack
+    stack: pulumiStack,
+    Project: pulumiStack
   }
 });
 
@@ -167,7 +170,8 @@ const db = new aws.rds.Instance(`aidb-${pulumiStack}`, {
   dbSubnetGroupName: dbSubnetGroup.name,
   tags: {
     managedBy: 'aitomatic',
-    stack: pulumiStack
+    stack: pulumiStack,
+    Project: pulumiStack
   }
 });
 
@@ -175,6 +179,32 @@ const db = new aws.rds.Instance(`aidb-${pulumiStack}`, {
 const defaultAsgMin = 6;
 const defaultAsgMax = 30;
 const defaultAsgDesired = 6;
+const commonTags = {
+  org: 'pulumi',
+  managedBy: 'aitomatic',
+  stack: `${pulumiStack}`,
+  Project: pulumiStack
+};
+
+const launchTemplate = new aws.ec2.LaunchTemplate(
+  `ai-eks-launchTemplate-${pulumiStack}`,
+  {
+    blockDeviceMappings: [{
+      deviceName: '/dev/xvda',
+      ebs: {
+        volumeSize: 40
+      }
+    }],
+    tags: commonTags,
+    tagSpecifications: [{
+      resourceType: 'instance',
+      tags: commonTags
+    }, {
+      resourceType: 'volume',
+      tags: commonTags
+    }]
+  }
+);
 
 const managedNodeGroup = eks.createManagedNodeGroup(
   `ai-eks-mng-${pulumiStack}`,
@@ -183,18 +213,18 @@ const managedNodeGroup = eks.createManagedNodeGroup(
     nodeGroupName: `ai-eks-mng-${pulumiStack}`,
     nodeRoleArn: role.arn,
     labels: { ondemand: 'true' },
-    tags: {
-      org: 'pulumi',
-      managedBy: 'aitomatic',
-      stack: `${pulumiStack}`
-    },
+    tags: commonTags,
     scalingConfig: {
       minSize: defaultAsgMin,
       maxSize: defaultAsgMax,
       desiredSize: defaultAsgDesired
     },
     instanceTypes: ['t3a.large'],
-    diskSize: 40
+    // diskSize: 40,
+    launchTemplate: {
+      version: '$Latest',
+      name: launchTemplate.name
+    }
   },
   cluster
 );
@@ -270,7 +300,8 @@ const ednsPublicCloudMapNs = new aws.servicediscovery.PublicDnsNamespace(
     description: `Cloud Map Namespace to support External DNS for ${pulumiStack}`,
     tags: {
       managedBy: 'aitomatic',
-      stack: pulumiStack
+      stack: pulumiStack,
+      Project: pulumiStack
     }
   }
 );
@@ -302,7 +333,8 @@ const ednsPrivateCloudMapNs = new aws.servicediscovery.PrivateDnsNamespace(
     vpc: vpc.id,
     tags: {
       managedBy: 'aitomatic',
-      stack: pulumiStack
+      stack: pulumiStack,
+      Project: pulumiStack
     }
   }
 );
@@ -704,7 +736,7 @@ const prometheus = new k8s.helm.v3.Release(
   'prometheus',
   {
     chart: 'kube-prometheus-stack',
-    namespace: aiMonitorNs.id,
+    namespace: aiMonitorNs.metadata.name,
     repositoryOpts: {
       repo: 'https://prometheus-community.github.io/helm-charts'
     },
@@ -730,7 +762,7 @@ const jaeger = new k8s.helm.v3.Release(
   'jaeger',
   {
     chart: 'jaeger',
-    namespace: aiMonitorNs.id,
+    namespace: aiMonitorNs.metadata.name,
     repositoryOpts: {
       repo: 'https://jaegertracing.github.io/helm-charts'
     },
@@ -805,7 +837,7 @@ const istio = new k8s.helm.v3.Release(
   {
     chart: 'istio',
     version: '1.11.1',
-    namespace: aiIstioNs.id,
+    namespace: aiIstioNs.metadata.name,
     repositoryOpts: {
       repo: 'https://getindata.github.io/helm-charts/'
     },
@@ -822,7 +854,7 @@ const kiali = new k8s.helm.v3.Release(
   'aisys-kiali',
   {
     chart: 'kiali-server',
-    namespace: aiIstioNs.id,
+    namespace: aiIstioNs.metadata.name,
     repositoryOpts: {
       repo: 'https://kiali.org/helm-charts/'
     },
@@ -918,7 +950,7 @@ const seldonChart = new k8s.helm.v3.Release(
     name: 'aiinfra-seldon',
     chart: 'seldon-core-operator',
     version: '1.11',
-    namespace: aiInfraNs.id,
+    namespace: aiInfraNs.metadata.name,
     repositoryOpts: {
       repo: 'https://storage.googleapis.com/seldon-charts/'
     },
@@ -998,7 +1030,7 @@ const jh = new k8s.helm.v3.Release(
   {
     chart: 'jupyterhub',
     name: 'jupyterhub',
-    namespace: jhNs.id,
+    namespace: jhNs.metadata.name,
     version: '1.1.3',
     repositoryOpts: {
       repo: 'https://jupyterhub.github.io/helm-chart/'
