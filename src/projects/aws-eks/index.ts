@@ -158,7 +158,7 @@ const db = new aws.rds.Instance(`aidb-${pulumiStack}`, {
   allocatedStorage: 10,
   maxAllocatedStorage: 100,
   engine: 'postgres',
-  engineVersion: '11.10',
+  engineVersion: '11.12',
   instanceClass: 'db.t3.medium',
   password: dbPassword.result,
   skipFinalSnapshot: true,
