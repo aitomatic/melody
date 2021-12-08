@@ -58,6 +58,10 @@ pulumi up
 kubectl get ns
 kubectl get pod -A
 ```
+8. Run command to verify stack is up-to-date with latest pulumi code
+```shell
+pulumi preview
+```
 
 ### TODO
 
