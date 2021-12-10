@@ -31,6 +31,7 @@ const githubOrgs = githubConfig.getObject('orgs');
 // Create a new VPC for the cluster.
 const vpc = new awsx.ec2.Vpc(`ai-eks-vpc-${pulumiStack}`, {
   numberOfNatGateways: 1,
+  // numberOfAvailabilityZones: "all",
   tags: {
     managedBy: 'aitomatic',
     stack: pulumiStack,
@@ -167,6 +168,7 @@ const db = new aws.rds.Instance(`aidb-${pulumiStack}`, {
     cluster.nodeSecurityGroup.id
   ],
   username: 'postgres',
+  name: 'ai_platform',
   dbSubnetGroupName: dbSubnetGroup.name,
   tags: {
     managedBy: 'aitomatic',
