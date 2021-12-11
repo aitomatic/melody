@@ -224,7 +224,7 @@ const managedNodeGroup = eks.createManagedNodeGroup(
     instanceTypes: ['t3a.large'],
     // diskSize: 40,
     launchTemplate: {
-      version: '$Latest',
+      version: launchTemplate.latestVersion.apply(v => `${v}`),
       name: launchTemplate.name
     }
   },
@@ -926,12 +926,12 @@ const jxGitopNs = new k8s.core.v1.Namespace(
   }
 );
 
-const jxgit = new k8s.helm.v3.Release(
+const jxgit = new k8s.helm.v3.Chart(
   'jx3',
   {
     chart: 'jx-git-operator',
     namespace: jxGitopNsName,
-    repositoryOpts: {
+    fetchOpts: {
       repo: 'https://jenkins-x-charts.github.io/repo'
     },
     values: {
