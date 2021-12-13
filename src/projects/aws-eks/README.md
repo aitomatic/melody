@@ -46,7 +46,7 @@ $ pulumi config set aws:profile <profile_name>
 JenkinsX uses GitOps for deployment. This makes it a bit complex to accommodate in our workflow. 
 Please use the template repo https://github.com/Aitomatic/ai-ci-cluster-template  and create a repo in the format  `https://github.com/Aitomatic/ai-ci-cluster-<customer>.git`.
 After creating the repo, update the file `jx-requirements.yml`. Some entries, such as region, env_name (i.e. cluster name) must be set.
-After creating the repo, change access setting to @ai-aitomatic-developers team with Admin role. Moreover, create OWNERS file with approvers to `aiengineer`
+After creating the repo, change access setting to @ai-aitomatic-developers team with Admin role
 
 Use the AI Engineer Bot account creds for Github.
 
