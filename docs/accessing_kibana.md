@@ -27,3 +27,4 @@ export AWS_PROFILE=<cluster-name>
 kubectl port-forward service/kibana-kibana 5601 -n aitomatic-monitor
 ```
 3. Access to `localhost:5601` to view kibana UI
+4. Go to menu `Observability/Logs/Stream` to view list of logs. From there, we can search, view logs by date range, etc.
