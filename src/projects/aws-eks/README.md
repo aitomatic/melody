@@ -44,7 +44,7 @@ $ pulumi config set aws:profile <profile_name>
 7. Configure JenkinsX Operator
 
 JenkinsX uses GitOps for deployment. This makes it a bit complex to accommodate in our workflow. 
-Please use the template repo https://github.com/Aitomatic/ai-ci-cluster-template  and create a repo in the format  `https://github.com/Aitomatic/ai-ci-cluster-<customer>.git`.
+Please use the template repo https://github.com/Aitomatic/ai-ci-cluster-template  and create a repo in the format  `https://github.com/Aitomatic/ai-ci-cluster-<customername-purpose>.git`.
 After creating the repo, update the file `jx-requirements.yml`. Some entries, such as region, env_name (i.e. cluster name) must be set.
 After creating the repo, change access setting to @ai-aitomatic-developers team with Admin role
 
@@ -58,11 +58,13 @@ $ pulumi config set jx:gittoken <git_bot_token> --secret
 
 8. Configure github Authentication for JupyterHub
 Create a GitHub OAuth App used for Jupyter Auth and set these values from that App -
+For `github:orgs`, refer to the `Pulumi.yaml` for the format
 
 ```shell
 
-pulumi config set github:clientid
-pulumi config set github:clientsecret
+pulumi config set github:clientid --secret
+pulumi config set github:clientsecret --secret
+pulumi config set github:orgs
 ```
 
 9. It will take 15-20 minutes, once the infra is up and running, you can go to AWS and see the cluster, RDS and all other components.
@@ -70,6 +72,8 @@ pulumi config set github:clientsecret
 ```
 $ pulumi up
 ```
+
+Answer `Yes` to the question `Do you want to perform this update?`
 
 9. Fetch KubeConfig for you new cluster and set it to be used with kubectl
 
