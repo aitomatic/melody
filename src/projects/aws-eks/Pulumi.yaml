@@ -25,7 +25,7 @@ template:
         description: Github OAuth App client ID for this deployment
       clientsecret:
         description: Github OAuth App client Secret
-      githuborgs:
+      orgs:
         description: The org or team to which the access should be restricted. 
           This is either just `org_a` for restricting access to organization org_a 
           or `org_a:team_1` to restrict access to team_1 in org_a.
