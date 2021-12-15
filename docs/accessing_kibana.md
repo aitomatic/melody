@@ -14,11 +14,11 @@ Before proceeding, please ensure you have the following tools installed:
 cd src/projects/aws-eks
 export AWS_REGION=us-west-2
 export PULUMI_CONFIG_PASSPHRASE=*******
-export KUBECONFIG=`pwd`/kubeconfig
 pulumi login s3://ai-pulumi-stacks
 pulumi stack ls
 pulumi stack select <cluster-name>
 pulumi stack output kubeconfig > kubeconfig
+export KUBECONFIG=`pwd`/kubeconfig
 pulumi stack output awsProfileSnippet >> ~/.aws/config
 export AWS_PROFILE=<cluster-name>
 ```
