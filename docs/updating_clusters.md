@@ -37,30 +37,37 @@ pulumi refresh
 - Note: If you have authorization or Access Denied error then use IAM console to add permissions to the cluster admin role:
     + ai-pulumi-stacks-access
     + AdministratorAccess
-5. Run command to update stack and EKS cluster
+5. Run the command,
+ ```shell
+  pulumi config set aws:region <cluster-region>
+  pulumi config set ai:parentzone cc.aitomatic.com
+```
+There are 2 options to update:
+
+a. Update entire stack and EKS cluster. This can impact all existing application deployments and the EKS cluster.
 ```shell
 pulumi up
 ```
-- Note: If you have error `Either name or zone_id must be set` then add these setting to file `Pulumi.<cluster-name>.yaml` in local
-    ```
-    config:
-      ai:parentzone: cc.aitomatic.com
-      aws:region: <cluster-region>
-    ```
-- Note: If you have error `panic: fatal: An assertion has failed` then run this command
+b. Update a specific component only. This can impact existing deployments that depend on this component.
+  1. Find the urn for the component using `pulumi stack -u`
+  2. Delete the component using the urn,
+  ```shell
+  pulumi destroy --target <component-urn> --target-dependents 
+  ```
+  The `component-urn` will be of the format - `urn:pulumi:<stack-name>::aitomatic-ml-infra::kubernetes:helm.sh/v3:Release::<component-name>`
+  3. Set any configuration used by the component
+  4. Bring up the component by running the command,
     ```shell
-    pulumi up --skip-preview
+      pulumi up --target <component-urn> --target-dependents 
     ```
-6. Fix errors if exists until `pulumi up` command run successfully
-- If you have error related to kubernetes resource already exists (service, configmap, etc.) then run `kubectl delete` command to cleanup it.
-7. Run kubectl command to verify EKS cluster is running normal
+7. Run kubectl commands and verify changes
 ```shell
 kubectl get ns
 kubectl get pod -A
 ```
-8. Run command to verify stack is up-to-date with latest pulumi code
+8. Run command to save updated stack
 ```shell
-pulumi preview
+pulumi refresh
 ```
 
 ### TODO
