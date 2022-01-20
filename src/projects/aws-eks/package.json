@@ -17,12 +17,12 @@
   "author": "Rohit Rai <inbox@rohitrai.com>",
   "license": "MIT",
   "dependencies": {
-    "@pulumi/aws": "^4.25.0",
+    "@pulumi/aws": "^4.35.0",
     "@pulumi/awsx": "^0.32.0",
-    "@pulumi/eks": "^0.34.0",
-    "@pulumi/kubernetes": "^3.8.2",
+    "@pulumi/eks": "^0.36.0",
+    "@pulumi/kubernetes": "^3.14.1",
     "@pulumi/kubernetesx": "^0.1.6",
-    "@pulumi/pulumi": "^3.16.0",
+    "@pulumi/pulumi": "^3.22.1",
     "@pulumi/random": "^4.3.1"
   },
   "devDependencies": {
