@@ -178,9 +178,9 @@ const db = new aws.rds.Instance(`aidb-${pulumiStack}`, {
 });
 
 // Create a simple AWS managed node group using a cluster as input.
-const defaultAsgMin = 6;
+const defaultAsgMin = 1;
 const defaultAsgMax = 30;
-const defaultAsgDesired = 6;
+const defaultAsgDesired = 1;
 const commonTags = {
   org: 'pulumi',
   managedBy: 'aitomatic',
@@ -214,12 +214,13 @@ const managedNodeGroup = eks.createManagedNodeGroup(
     cluster: cluster,
     nodeGroupName: `ai-eks-mng-${pulumiStack}`,
     nodeRoleArn: role.arn,
-    labels: { ondemand: 'true' },
+    capacityType: 'SPOT',
+    labels: { ondemand: 'false' },
     tags: commonTags,
     scalingConfig: {
       minSize: defaultAsgMin,
       maxSize: defaultAsgMax,
-      desiredSize: defaultAsgDesired
+      desiredSize: defaultAsgDesired,
     },
     instanceTypes: ['t3a.large'],
     // diskSize: 40,
